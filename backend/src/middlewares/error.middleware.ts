@@ -1,6 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
 import { AppError } from '../utils/errors';
-import { env } from '../config/env';
 
 export function errorMiddleware(
   err: unknown,
@@ -19,9 +18,10 @@ export function errorMiddleware(
 
   console.error(err);
 
+  // Never leak stack traces or internal Error strings to clients.
   return res.status(500).json({
     success: false,
-    message: env.NODE_ENV === 'production' ? 'Something went wrong' : String(err),
+    message: 'Something went wrong',
     code: 'INTERNAL_ERROR',
   });
 }

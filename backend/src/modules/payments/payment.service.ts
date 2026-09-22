@@ -215,6 +215,32 @@ export class PaymentService {
       },
     });
 
+    // Pending rows so abandoned/expired checkout can be marked ROLLED_BACK.
+    await prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.create({
+        data: {
+          organizationId: org.id,
+          amountCents: plan.priceCents,
+          currency: plan.currency,
+          status: PaymentStatus.PENDING,
+          stripeCheckoutSessionId: session.id,
+          description: `${action} pending — ${plan.name}`,
+        },
+      });
+      await tx.transaction.create({
+        data: {
+          organizationId: org.id,
+          paymentId: payment.id,
+          amountCents: plan.priceCents,
+          currency: plan.currency,
+          status: TransactionStatus.PENDING,
+          type: action === 'upgrade' ? 'PLAN_UPGRADE' : 'PLAN_DOWNGRADE',
+          description: `Pending subscription ${action} to ${plan.name}`,
+          metadata: { sessionId: session.id },
+        },
+      });
+    });
+
     return { checkoutUrl: session.url, sessionId: session.id };
   }
 
@@ -452,29 +478,59 @@ export class PaymentService {
         },
       });
 
-      const payment = await tx.payment.create({
-        data: {
-          organizationId,
-          amountCents,
-          currency,
-          status: PaymentStatus.SUCCEEDED,
-          stripeCheckoutSessionId: session.id,
-          stripePaymentIntentId: paymentIntentId,
-          description: `${action} — ${plan.name}`,
-        },
+      const existingPayment = await tx.payment.findUnique({
+        where: { stripeCheckoutSessionId: session.id },
       });
 
-      const transaction = await tx.transaction.create({
-        data: {
-          organizationId,
-          paymentId: payment.id,
-          amountCents,
-          currency,
-          status: TransactionStatus.SUCCESS,
-          type: action === 'upgrade' ? 'PLAN_UPGRADE' : 'PLAN_DOWNGRADE',
-          description: `Subscription ${action} to ${plan.name}`,
-        },
+      const payment = existingPayment
+        ? await tx.payment.update({
+            where: { id: existingPayment.id },
+            data: {
+              amountCents,
+              currency,
+              status: PaymentStatus.SUCCEEDED,
+              stripePaymentIntentId: paymentIntentId,
+              description: `${action} — ${plan.name}`,
+            },
+          })
+        : await tx.payment.create({
+            data: {
+              organizationId,
+              amountCents,
+              currency,
+              status: PaymentStatus.SUCCEEDED,
+              stripeCheckoutSessionId: session.id,
+              stripePaymentIntentId: paymentIntentId,
+              description: `${action} — ${plan.name}`,
+            },
+          });
+
+      const existingTx = await tx.transaction.findFirst({
+        where: { paymentId: payment.id, status: TransactionStatus.PENDING },
       });
+
+      const transaction = existingTx
+        ? await tx.transaction.update({
+            where: { id: existingTx.id },
+            data: {
+              amountCents,
+              currency,
+              status: TransactionStatus.SUCCESS,
+              type: action === 'upgrade' ? 'PLAN_UPGRADE' : 'PLAN_DOWNGRADE',
+              description: `Subscription ${action} to ${plan.name}`,
+            },
+          })
+        : await tx.transaction.create({
+            data: {
+              organizationId,
+              paymentId: payment.id,
+              amountCents,
+              currency,
+              status: TransactionStatus.SUCCESS,
+              type: action === 'upgrade' ? 'PLAN_UPGRADE' : 'PLAN_DOWNGRADE',
+              description: `Subscription ${action} to ${plan.name}`,
+            },
+          });
 
       return { subscription, payment, transaction };
     });
@@ -512,6 +568,26 @@ export class PaymentService {
         ? session.customer_details.email
         : undefined);
 
+    // Roll back any PENDING payment/tx rows tied to this checkout session.
+    const pendingPayment = await prisma.payment.findFirst({
+      where: {
+        stripeCheckoutSessionId: session.id,
+        status: PaymentStatus.PENDING,
+      },
+    });
+    if (pendingPayment) {
+      await prisma.$transaction([
+        prisma.payment.update({
+          where: { id: pendingPayment.id },
+          data: { status: PaymentStatus.FAILED },
+        }),
+        prisma.transaction.updateMany({
+          where: { paymentId: pendingPayment.id, status: TransactionStatus.PENDING },
+          data: { status: TransactionStatus.ROLLED_BACK },
+        }),
+      ]);
+    }
+
     if (pendingId) {
       const pending = await prisma.pendingRegistration.findUnique({
         where: { id: pendingId },
@@ -525,31 +601,266 @@ export class PaymentService {
     if (organizationId) {
       const org = await prisma.organization.findUnique({ where: { id: organizationId } });
       if (org) {
-        await prisma.payment.create({
-          data: {
-            organizationId,
-            amountCents: session.amount_total ?? 0,
-            currency: session.currency ?? 'usd',
-            status: PaymentStatus.FAILED,
-            stripeCheckoutSessionId: session.id,
-            description: 'Failed checkout',
-          },
-        });
-        await prisma.transaction.create({
-          data: {
-            organizationId,
-            amountCents: session.amount_total ?? 0,
-            currency: session.currency ?? 'usd',
-            status: TransactionStatus.FAILED,
-            type: 'PAYMENT_FAILED',
-            description: 'Checkout payment failed',
-          },
-        });
+        if (!pendingPayment) {
+          await prisma.payment.create({
+            data: {
+              organizationId,
+              amountCents: session.amount_total ?? 0,
+              currency: session.currency ?? 'usd',
+              status: PaymentStatus.FAILED,
+              stripeCheckoutSessionId: session.id,
+              description: 'Failed checkout',
+            },
+          });
+          await prisma.transaction.create({
+            data: {
+              organizationId,
+              amountCents: session.amount_total ?? 0,
+              currency: session.currency ?? 'usd',
+              status: TransactionStatus.FAILED,
+              type: 'PAYMENT_FAILED',
+              description: 'Checkout payment failed',
+            },
+          });
+        }
         if (org.billingEmail || email) {
           await emailService.sendPaymentFailed(org.billingEmail || email!, org.name);
         }
       }
     }
+  }
+
+  /**
+   * Recurring invoice payment (renewal). Skips subscription_create when the
+   * initial checkout.session.completed path already recorded the payment.
+   */
+  async handleInvoicePaid(invoice: Stripe.Invoice) {
+    const inv = invoice as Stripe.Invoice & {
+      subscription?: string | { id: string } | null;
+      billing_reason?: string | null;
+      payment_intent?: string | { id: string } | null;
+    };
+    const subscriptionRef = inv.subscription;
+    const stripeSubscriptionId =
+      typeof subscriptionRef === 'string' ? subscriptionRef : subscriptionRef?.id;
+    if (!stripeSubscriptionId) return;
+
+    // Initial subscription invoices are activated via checkout.session.completed.
+    if (inv.billing_reason === 'subscription_create') return;
+
+    const paymentIntentId =
+      typeof inv.payment_intent === 'string' ? inv.payment_intent : inv.payment_intent?.id;
+
+    if (paymentIntentId) {
+      const existing = await prisma.payment.findUnique({
+        where: { stripePaymentIntentId: paymentIntentId },
+      });
+      if (existing) return;
+    }
+
+    const subscription = await prisma.subscription.findUnique({
+      where: { stripeSubscriptionId },
+      include: { organization: true, plan: true },
+    });
+    if (!subscription) return;
+
+    const amountCents = invoice.amount_paid ?? invoice.amount_due ?? 0;
+    const currency = invoice.currency ?? subscription.plan.currency;
+    const periodStart = invoice.lines?.data?.[0]?.period?.start
+      ? new Date(invoice.lines.data[0].period.start * 1000)
+      : new Date();
+    const periodEnd = invoice.lines?.data?.[0]?.period?.end
+      ? new Date(invoice.lines.data[0].period.end * 1000)
+      : subscription.currentPeriodEnd;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          status: SubscriptionStatus.ACTIVE,
+          currentPeriodStart: periodStart,
+          currentPeriodEnd: periodEnd ?? undefined,
+        },
+      });
+
+      const payment = await tx.payment.create({
+        data: {
+          organizationId: subscription.organizationId,
+          amountCents,
+          currency,
+          status: PaymentStatus.SUCCEEDED,
+          stripePaymentIntentId: paymentIntentId,
+          description: `Renewal — ${subscription.plan.name}`,
+        },
+      });
+
+      await tx.transaction.create({
+        data: {
+          organizationId: subscription.organizationId,
+          paymentId: payment.id,
+          amountCents,
+          currency,
+          status: TransactionStatus.SUCCESS,
+          type: 'SUBSCRIPTION_RENEWAL',
+          description: `Subscription renewal for ${subscription.plan.name}`,
+          metadata: { invoiceId: invoice.id },
+        },
+      });
+    });
+
+    const notifyEmail =
+      subscription.organization.billingEmail ||
+      (await prisma.user.findFirst({
+        where: { organizationId: subscription.organizationId, role: Role.ORG_ADMIN },
+      }))?.email;
+
+    if (notifyEmail) {
+      await emailService.sendPaymentSucceeded(
+        notifyEmail,
+        subscription.organization.name,
+        moneyLabel(amountCents, currency),
+      );
+    }
+  }
+
+  async handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
+    const inv = invoice as Stripe.Invoice & {
+      subscription?: string | { id: string } | null;
+    };
+    const subscriptionRef = inv.subscription;
+    const stripeSubscriptionId =
+      typeof subscriptionRef === 'string' ? subscriptionRef : subscriptionRef?.id;
+    if (!stripeSubscriptionId) return;
+
+    const subscription = await prisma.subscription.findUnique({
+      where: { stripeSubscriptionId },
+      include: { organization: true, plan: true },
+    });
+    if (!subscription) return;
+
+    const amountCents = invoice.amount_due ?? 0;
+    const currency = invoice.currency ?? subscription.plan.currency;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: { status: SubscriptionStatus.FAILED },
+      });
+
+      const payment = await tx.payment.create({
+        data: {
+          organizationId: subscription.organizationId,
+          amountCents,
+          currency,
+          status: PaymentStatus.FAILED,
+          description: `Renewal failed — ${subscription.plan.name}`,
+        },
+      });
+
+      await tx.transaction.create({
+        data: {
+          organizationId: subscription.organizationId,
+          paymentId: payment.id,
+          amountCents,
+          currency,
+          status: TransactionStatus.FAILED,
+          type: 'SUBSCRIPTION_RENEWAL_FAILED',
+          description: `Subscription renewal failed for ${subscription.plan.name}`,
+          metadata: { invoiceId: invoice.id },
+        },
+      });
+    });
+
+    const notifyEmail =
+      subscription.organization.billingEmail ||
+      (await prisma.user.findFirst({
+        where: { organizationId: subscription.organizationId, role: Role.ORG_ADMIN },
+      }))?.email;
+
+    if (notifyEmail) {
+      await emailService.sendPaymentFailed(notifyEmail, subscription.organization.name);
+    }
+  }
+
+  async handleStripeSubscriptionUpdated(stripeSub: Stripe.Subscription) {
+    const local = await prisma.subscription.findUnique({
+      where: { stripeSubscriptionId: stripeSub.id },
+    });
+    if (!local) return;
+
+    const status = mapStripeSubscriptionStatus(stripeSub.status);
+    const periodStart = (stripeSub as Stripe.Subscription & { current_period_start?: number })
+      .current_period_start;
+    const periodEnd = (stripeSub as Stripe.Subscription & { current_period_end?: number })
+      .current_period_end;
+
+    await prisma.subscription.update({
+      where: { id: local.id },
+      data: {
+        status,
+        cancelAtPeriodEnd: stripeSub.cancel_at_period_end ?? false,
+        ...(periodStart ? { currentPeriodStart: new Date(periodStart * 1000) } : {}),
+        ...(periodEnd ? { currentPeriodEnd: new Date(periodEnd * 1000) } : {}),
+      },
+    });
+  }
+
+  async handleStripeSubscriptionDeleted(stripeSub: Stripe.Subscription) {
+    const local = await prisma.subscription.findUnique({
+      where: { stripeSubscriptionId: stripeSub.id },
+    });
+    if (!local) return;
+
+    await prisma.subscription.update({
+      where: { id: local.id },
+      data: {
+        status: SubscriptionStatus.EXPIRED,
+        cancelAtPeriodEnd: false,
+      },
+    });
+  }
+
+  async handleChargeRefunded(charge: Stripe.Charge) {
+    const paymentIntentId =
+      typeof charge.payment_intent === 'string'
+        ? charge.payment_intent
+        : charge.payment_intent?.id;
+    if (!paymentIntentId) return;
+
+    const payment = await prisma.payment.findUnique({
+      where: { stripePaymentIntentId: paymentIntentId },
+    });
+    if (!payment || payment.status === PaymentStatus.REFUNDED) return;
+
+    await prisma.$transaction([
+      prisma.payment.update({
+        where: { id: payment.id },
+        data: { status: PaymentStatus.REFUNDED },
+      }),
+      prisma.transaction.updateMany({
+        where: { paymentId: payment.id },
+        data: { status: TransactionStatus.REFUNDED },
+      }),
+    ]);
+  }
+}
+
+function mapStripeSubscriptionStatus(status: Stripe.Subscription.Status): SubscriptionStatus {
+  switch (status) {
+    case 'active':
+    case 'trialing':
+      return SubscriptionStatus.ACTIVE;
+    case 'past_due':
+    case 'unpaid':
+    case 'incomplete':
+    case 'incomplete_expired':
+      return SubscriptionStatus.FAILED;
+    case 'canceled':
+      return SubscriptionStatus.CANCELLED;
+    case 'paused':
+      return SubscriptionStatus.PENDING;
+    default:
+      return SubscriptionStatus.PENDING;
   }
 }
 

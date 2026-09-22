@@ -92,21 +92,32 @@ Register (org + admin + plan)
   → User pays on Stripe
   → Webhook checkout.session.completed
        1. Verify Stripe signature (raw body)
-       2. Insert WebhookEvent (unique stripeEventId)
-       3. Prisma $transaction: Organization ACTIVE + ORG_ADMIN + Subscription + Payment + Transaction
-       4. Delete PendingRegistration
+       2. Run Prisma $transaction: Organization ACTIVE + ORG_ADMIN + Subscription + Payment + Transaction
+       3. Delete PendingRegistration
+       4. Record WebhookEvent (unique stripeEventId) — only after success
   → Success email
+```
+
+Renewals and lifecycle updates:
+
+```text
+invoice.paid (subscription_cycle) → Payment + Transaction (RENEWAL) + period sync
+invoice.payment_failed            → Payment/Transaction FAILED + Subscription FAILED
+customer.subscription.updated     → status / period / cancel_at_period_end sync
+customer.subscription.deleted     → Subscription EXPIRED
+charge.refunded                   → Payment + Transaction REFUNDED
+checkout expired / failed         → PENDING plan-change rows → ROLLED_BACK / FAILED
 ```
 
 The Stripe success URL is UX only. **Only the webhook activates the organization.** Abandoned payments leave a pending registration that can retry checkout.
 
 ## Webhook Idempotency
 
-`WebhookEvent.stripeEventId` is unique. Duplicate deliveries return success without re-applying business effects.
+`WebhookEvent.stripeEventId` is unique. Business effects run **before** the event row is inserted. If activation fails, no event row is stored, so Stripe retries can re-apply safely. Duplicate deliveries (same event id already recorded) return success without re-applying business effects. Concurrent workers rely on the unique constraint plus business idempotency (consumed `PendingRegistration`, unique checkout session / payment intent).
 
 ## Rollback
 
-Payment activation runs inside `prisma.$transaction`. If any step fails (e.g. unique email conflict), the entire unit rolls back — no partial org/user/payment rows. Covered by automated tests.
+Payment activation runs inside `prisma.$transaction`. If any step fails (e.g. unique email conflict), the entire unit rolls back — no partial org/user/payment rows. Covered by automated tests. Abandoned plan-change checkouts mark pending ledger rows as `ROLLED_BACK`.
 
 ## Security
 
@@ -118,7 +129,7 @@ Payment activation runs inside `prisma.$transaction`. If any step fails (e.g. un
 - Rate limiting on sensitive routes
 - Stripe webhook signature verification
 - Secrets only in environment variables
-- API errors never leak stack traces or DB internals
+- API errors never leak stack traces or DB internals (unknown errors always return a generic 500 message)
 
 ## Email
 
@@ -280,6 +291,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs backend typecheck + tests (with
 - Per-organization custom SMTP is a listed bonus and is **not** implemented
 - Local Stripe/Resend require real test API keys for end-to-end payment/email delivery
 - Refresh cookie rotation is basic (single stored hash per refresh)
+- Renewal sync depends on Stripe sending `invoice.paid` / subscription events to the webhook endpoint
 
 ## AI Usage
 

@@ -25,6 +25,15 @@ export class WebhookService {
     }
   }
 
+  /**
+   * Idempotent webhook handling:
+   * 1) If event id already recorded → duplicate (safe no-op)
+   * 2) Run business effects first
+   * 3) Record event id only after success
+   *
+   * This way a failed activation does not block Stripe retries.
+   * Concurrent deliveries: unique stripeEventId + business-level idempotency.
+   */
   async handleEvent(event: Stripe.Event) {
     const existing = await prisma.webhookEvent.findUnique({
       where: { stripeEventId: event.id },
@@ -32,6 +41,8 @@ export class WebhookService {
     if (existing) {
       return { duplicate: true, code: 'DUPLICATE_WEBHOOK' as const };
     }
+
+    await this.dispatch(event);
 
     try {
       await prisma.webhookEvent.create({
@@ -41,10 +52,14 @@ export class WebhookService {
         },
       });
     } catch {
-      // Unique constraint race — another worker processed it
+      // Another worker recorded the same event after both passed the pre-check.
       return { duplicate: true, code: 'DUPLICATE_WEBHOOK' as const };
     }
 
+    return { duplicate: false };
+  }
+
+  private async dispatch(event: Stripe.Event) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
@@ -59,11 +74,33 @@ export class WebhookService {
         await paymentService.markCheckoutFailed(session);
         break;
       }
+      case 'invoice.paid': {
+        await paymentService.handleInvoicePaid(event.data.object as Stripe.Invoice);
+        break;
+      }
+      case 'invoice.payment_failed': {
+        await paymentService.handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+        break;
+      }
+      case 'customer.subscription.updated': {
+        await paymentService.handleStripeSubscriptionUpdated(
+          event.data.object as Stripe.Subscription,
+        );
+        break;
+      }
+      case 'customer.subscription.deleted': {
+        await paymentService.handleStripeSubscriptionDeleted(
+          event.data.object as Stripe.Subscription,
+        );
+        break;
+      }
+      case 'charge.refunded': {
+        await paymentService.handleChargeRefunded(event.data.object as Stripe.Charge);
+        break;
+      }
       default:
         break;
     }
-
-    return { duplicate: false };
   }
 }
 
