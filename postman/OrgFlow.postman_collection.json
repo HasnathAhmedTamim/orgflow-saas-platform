@@ -1,0 +1,337 @@
+{
+  "info": {
+    "_postman_id": "orgflow-api-collection",
+    "name": "OrgFlow API",
+    "description": "OrgFlow multi-tenant SaaS API collection. Use cookie jar for JWT cookies after login.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000/api" },
+    { "key": "organizationId", "value": "" },
+    { "key": "pendingId", "value": "" },
+    { "key": "planId", "value": "" },
+    { "key": "memberId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"platform.admin@orgflow.test\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Me",
+          "request": { "method": "GET", "url": "{{baseUrl}}/auth/me" }
+        },
+        {
+          "name": "Refresh",
+          "request": { "method": "POST", "url": "{{baseUrl}}/auth/refresh" }
+        },
+        {
+          "name": "Logout",
+          "request": { "method": "POST", "url": "{{baseUrl}}/auth/logout" }
+        },
+        {
+          "name": "Forgot password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"org.admin@acme.test\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/forgot-password"
+          }
+        },
+        {
+          "name": "Reset password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"REPLACE\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/reset-password"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Platform Admin",
+      "item": [
+        {
+          "name": "Stats",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/stats" }
+        },
+        {
+          "name": "List organizations",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/organizations?search=&status=&page=1&limit=20"
+          }
+        },
+        {
+          "name": "Organization detail",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/organizations/{{organizationId}}"
+          }
+        },
+        {
+          "name": "Suspend organization",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"SUSPENDED\"\n}"
+            },
+            "url": "{{baseUrl}}/admin/organizations/{{organizationId}}/status"
+          }
+        },
+        {
+          "name": "Platform transactions",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/transactions?page=1&limit=20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Organizations",
+      "item": [
+        {
+          "name": "My organization",
+          "request": { "method": "GET", "url": "{{baseUrl}}/organizations/me" }
+        },
+        {
+          "name": "Update my organization",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Corp\",\n  \"billingEmail\": \"billing@acme.test\"\n}"
+            },
+            "url": "{{baseUrl}}/organizations/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Members",
+      "item": [
+        {
+          "name": "List members",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/organizations/me/members"
+          }
+        },
+        {
+          "name": "Invite member",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"new.member@acme.test\",\n  \"role\": \"MEMBER\"\n}"
+            },
+            "url": "{{baseUrl}}/organizations/me/members/invite"
+          }
+        },
+        {
+          "name": "Accept invitation",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"REPLACE\",\n  \"name\": \"New Member\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "{{baseUrl}}/organizations/invitations/accept"
+          }
+        },
+        {
+          "name": "Update member role",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"ORG_ADMIN\"\n}"
+            },
+            "url": "{{baseUrl}}/organizations/me/members/{{memberId}}"
+          }
+        },
+        {
+          "name": "Remove member",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/organizations/me/members/{{memberId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Plans",
+      "item": [
+        {
+          "name": "List public plans",
+          "request": { "method": "GET", "url": "{{baseUrl}}/plans" }
+        },
+        {
+          "name": "Create plan",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Growth\",\n  \"priceCents\": 4900,\n  \"currency\": \"usd\",\n  \"interval\": \"MONTHLY\",\n  \"features\": [\"10 seats\"]\n}"
+            },
+            "url": "{{baseUrl}}/plans"
+          }
+        },
+        {
+          "name": "Update plan",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isActive\": false\n}"
+            },
+            "url": "{{baseUrl}}/plans/{{planId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Subscriptions",
+      "item": [
+        {
+          "name": "My subscription",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/subscriptions/me"
+          }
+        },
+        {
+          "name": "Upgrade",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planId\": \"{{planId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/subscriptions/upgrade"
+          }
+        },
+        {
+          "name": "Downgrade",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planId\": \"{{planId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/subscriptions/downgrade"
+          }
+        },
+        {
+          "name": "Cancel",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/subscriptions/cancel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Register (paid onboarding)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationName\": \"New Org\",\n  \"adminName\": \"Admin\",\n  \"email\": \"admin@neworg.test\",\n  \"password\": \"Password123!\",\n  \"planId\": \"{{planId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/register"
+          }
+        },
+        {
+          "name": "Retry registration checkout",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/register/{{pendingId}}/retry"
+          }
+        },
+        {
+          "name": "List payments",
+          "request": { "method": "GET", "url": "{{baseUrl}}/payments" }
+        }
+      ]
+    },
+    {
+      "name": "Transactions",
+      "item": [
+        {
+          "name": "Org transactions",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/transactions?status="
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "Stripe webhook (raw body + signature)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Stripe-Signature", "value": "REPLACE" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"evt_test\",\n  \"type\": \"checkout.session.completed\"\n}"
+            },
+            "url": "http://localhost:4000/api/webhooks/stripe"
+          }
+        }
+      ]
+    }
+  ]
+}
