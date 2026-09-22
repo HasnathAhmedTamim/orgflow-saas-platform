@@ -3,7 +3,8 @@ import path from 'path';
 
 export default defineConfig({
   test: {
-    environment: 'jsdom',
+    // Pure unit tests (utils) — avoid jsdom/undici Node compatibility issues in CI
+    environment: 'node',
     globals: true,
     css: false,
   },
