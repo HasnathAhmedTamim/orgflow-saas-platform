@@ -1,23 +1,40 @@
 {
   "info": {
-    "_postman_id": "orgflow-api-collection",
-    "name": "OrgFlow API",
-    "description": "OrgFlow multi-tenant SaaS API collection. Use cookie jar for JWT cookies after login.",
+    "_postman_id": "orgflow-full-usecases",
+    "name": "OrgFlow — Complete Use Cases (Serial)",
+    "description": "# OrgFlow API — Complete Serial Use Cases\n\nRun folders **top to bottom** (01 → 12).\n\n## Before you start\n1. Backend running: `http://localhost:5000`\n2. Postman → Settings → **Cookies = ON**\n3. Stripe CLI (for folder 10): `stripe listen --forward-to localhost:5000/api/webhooks/stripe`\n\n## Seed accounts (password for all: `Password123!`)\n| Role | Email |\n|------|-------|\n| Platform Admin | admin@orgflow.com |\n| Org Admin (Acme) | admin@acme.com |\n| Member (Acme) | member@acme.com |\n| Org Admin (Nordic Soft) | admin@nordicsoft.com |\n\nAfter each Login, cookies `orgflow_access` and `orgflow_refresh` are stored automatically.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:4000/api" },
+    { "key": "baseUrl", "value": "http://localhost:5000/api" },
     { "key": "organizationId", "value": "" },
-    { "key": "pendingId", "value": "" },
     { "key": "planId", "value": "" },
-    { "key": "memberId", "value": "" }
+    { "key": "newPlanId", "value": "" },
+    { "key": "memberId", "value": "" },
+    { "key": "paymentId", "value": "" },
+    { "key": "pendingId", "value": "" },
+    { "key": "checkoutUrl", "value": "" },
+    { "key": "inviteToken", "value": "" }
   ],
   "item": [
     {
-      "name": "Health",
+      "name": "01 — Health Check",
+      "description": "Confirm API is reachable before testing use cases.",
       "item": [
         {
-          "name": "Health check",
+          "name": "01.1 API health",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('API healthy', () => {",
+                "  pm.response.to.have.status(200);",
+                "  pm.expect(pm.response.json().success).to.be.true;",
+                "});"
+              ]
+            }
+          }],
           "request": {
             "method": "GET",
             "header": [],
@@ -27,81 +44,276 @@
       ]
     },
     {
-      "name": "Auth",
+      "name": "02 — Public Plans (before login)",
+      "description": "Anyone can see active plans used during registration.",
       "item": [
         {
-          "name": "Login",
+          "name": "02.1 List active subscription plans",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Plans listed', () => pm.response.to.have.status(200));",
+                "const plans = pm.response.json().data || [];",
+                "pm.test('At least one plan', () => pm.expect(plans.length).to.be.above(0));",
+                "if (plans[0]) pm.collectionVariables.set('planId', plans[0].id);"
+              ]
+            }
+          }],
           "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"platform.admin@orgflow.test\",\n  \"password\": \"Password123!\"\n}"
-            },
-            "url": "{{baseUrl}}/auth/login"
-          }
-        },
-        {
-          "name": "Me",
-          "request": { "method": "GET", "url": "{{baseUrl}}/auth/me" }
-        },
-        {
-          "name": "Refresh",
-          "request": { "method": "POST", "url": "{{baseUrl}}/auth/refresh" }
-        },
-        {
-          "name": "Logout",
-          "request": { "method": "POST", "url": "{{baseUrl}}/auth/logout" }
-        },
-        {
-          "name": "Forgot password",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"org.admin@acme.test\"\n}"
-            },
-            "url": "{{baseUrl}}/auth/forgot-password"
-          }
-        },
-        {
-          "name": "Reset password",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"token\": \"REPLACE\",\n  \"password\": \"Password123!\"\n}"
-            },
-            "url": "{{baseUrl}}/auth/reset-password"
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/plans"
           }
         }
       ]
     },
     {
-      "name": "Platform Admin",
+      "name": "03 — Authentication (Platform Admin)",
+      "description": "Login, session, refresh, profile for Platform Admin.",
       "item": [
         {
-          "name": "Stats",
-          "request": { "method": "GET", "url": "{{baseUrl}}/admin/stats" }
-        },
-        {
-          "name": "List organizations",
+          "name": "03.1 Login — Platform Admin (admin@orgflow.com)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Logged in as PLATFORM_ADMIN', () => {",
+                "  pm.response.to.have.status(200);",
+                "  pm.expect(pm.response.json().data.user.role).to.eql('PLATFORM_ADMIN');",
+                "});"
+              ]
+            }
+          }],
           "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/admin/organizations?search=&status=&page=1&limit=20"
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@orgflow.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
           }
         },
         {
-          "name": "Organization detail",
+          "name": "03.2 Get current user (me)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Current user returned', () => {",
+                "  pm.response.to.have.status(200);",
+                "  pm.expect(pm.response.json().data.email).to.eql('admin@orgflow.com');",
+                "});"
+              ]
+            }
+          }],
           "request": {
             "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "03.3 Refresh access token",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": ["pm.test('Token refreshed', () => pm.response.to.have.status(200));"]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/refresh"
+          }
+        },
+        {
+          "name": "03.4 Invalid login (should fail)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Invalid credentials rejected', () => {",
+                "  pm.response.to.have.status(401);",
+                "  pm.expect(pm.response.json().code).to.eql('INVALID_CREDENTIALS');",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@orgflow.com\",\n  \"password\": \"WrongPassword!\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 — Platform Admin Panel",
+      "description": "Stats, organizations, plans, transactions, suspend/reactivate.",
+      "item": [
+        {
+          "name": "04.0 Re-login Platform Admin (if needed)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@orgflow.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "04.1 Stats overview dashboard",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Dashboard stats OK', () => {",
+                "  pm.response.to.have.status(200);",
+                "  const d = pm.response.json().data;",
+                "  pm.expect(d).to.include.keys('totalOrganizations','totalUsers','activeSubscriptions','totalRevenueCents','failedPaymentCount');",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/admin/stats"
+          }
+        },
+        {
+          "name": "04.2 List organizations (search Acme)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Organizations listed', () => pm.response.to.have.status(200));",
+                "const items = pm.response.json().data.items || [];",
+                "pm.expect(items.length).to.be.above(0);",
+                "pm.collectionVariables.set('organizationId', items[0].id);"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/admin/organizations?search=Acme&page=1&limit=20"
+          }
+        },
+        {
+          "name": "04.3 List organizations (filter ACTIVE)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/admin/organizations?status=ACTIVE&page=1&limit=20"
+          }
+        },
+        {
+          "name": "04.4 Organization detail (members, billing, history)",
+          "request": {
+            "method": "GET",
+            "header": [],
             "url": "{{baseUrl}}/admin/organizations/{{organizationId}}"
           }
         },
         {
-          "name": "Suspend organization",
+          "name": "04.5 List all plans (admin)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const plans = pm.response.json().data || [];",
+                "if (plans[0]) pm.collectionVariables.set('planId', plans[0].id);"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/plans/all"
+          }
+        },
+        {
+          "name": "04.6 Create plan",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Plan created', () => pm.response.to.have.status(201));",
+                "const plan = pm.response.json().data;",
+                "if (plan && plan.id) pm.collectionVariables.set('newPlanId', plan.id);"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Growth\",\n  \"description\": \"Mid-tier plan for scaling teams\",\n  \"priceCents\": 4900,\n  \"currency\": \"usd\",\n  \"interval\": \"MONTHLY\",\n  \"features\": [\"Up to 10 members\", \"Email support\", \"Basic analytics\"],\n  \"isActive\": true\n}"
+            },
+            "url": "{{baseUrl}}/plans"
+          }
+        },
+        {
+          "name": "04.7 Update / disable plan",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated Growth plan\",\n  \"isActive\": false\n}"
+            },
+            "url": "{{baseUrl}}/plans/{{newPlanId}}"
+          }
+        },
+        {
+          "name": "04.8 Platform transactions (status filter)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/admin/transactions?status=SUCCESS&page=1&limit=20"
+          }
+        },
+        {
+          "name": "04.9 Platform transactions (org + date filter)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/admin/transactions?organizationId={{organizationId}}&from=2024-01-01&to=2030-12-31&page=1&limit=20"
+          }
+        },
+        {
+          "name": "04.10 Suspend organization",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Organization suspended', () => {",
+                "  pm.response.to.have.status(200);",
+                "  pm.expect(pm.response.json().data.status).to.eql('SUSPENDED');",
+                "});"
+              ]
+            }
+          }],
           "request": {
             "method": "PATCH",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -113,135 +325,198 @@
           }
         },
         {
-          "name": "Platform transactions",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/admin/transactions?page=1&limit=20"
-          }
-        }
-      ]
-    },
-    {
-      "name": "Organizations",
-      "item": [
-        {
-          "name": "My organization",
-          "request": { "method": "GET", "url": "{{baseUrl}}/organizations/me" }
-        },
-        {
-          "name": "Update my organization",
+          "name": "04.11 Reactivate organization",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Organization reactivated', () => {",
+                "  pm.response.to.have.status(200);",
+                "  pm.expect(pm.response.json().data.status).to.eql('ACTIVE');",
+                "});"
+              ]
+            }
+          }],
           "request": {
             "method": "PATCH",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Acme Corp\",\n  \"billingEmail\": \"billing@acme.test\"\n}"
+              "raw": "{\n  \"status\": \"ACTIVE\"\n}"
             },
-            "url": "{{baseUrl}}/organizations/me"
+            "url": "{{baseUrl}}/admin/organizations/{{organizationId}}/status"
+          }
+        },
+        {
+          "name": "04.12 Logout Platform Admin",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/logout"
           }
         }
       ]
     },
     {
-      "name": "Members",
+      "name": "05 — Authentication (Org Admin)",
+      "description": "Login as Acme Corporation admin.",
       "item": [
         {
-          "name": "List members",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/organizations/me/members"
-          }
-        },
-        {
-          "name": "Invite member",
+          "name": "05.1 Login — Org Admin (admin@acme.com)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Logged in as ORG_ADMIN', () => {",
+                "  pm.response.to.have.status(200);",
+                "  pm.expect(pm.response.json().data.user.role).to.eql('ORG_ADMIN');",
+                "});"
+              ]
+            }
+          }],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"new.member@acme.test\",\n  \"role\": \"MEMBER\"\n}"
+              "raw": "{\n  \"email\": \"admin@acme.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 — Organization Admin Panel",
+      "description": "Org profile, members, invitation, subscription, billing, invoices, transactions.",
+      "item": [
+        {
+          "name": "06.1 View organization profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/organizations/me"
+          }
+        },
+        {
+          "name": "06.2 Update organization profile",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": ["pm.test('Org profile updated', () => pm.response.to.have.status(200));"]
+            }
+          }],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Corporation\",\n  \"contactEmail\": \"contact@acme.com\",\n  \"contactPhone\": \"+1-555-0100\",\n  \"billingEmail\": \"billing@acme.com\"\n}"
+            },
+            "url": "{{baseUrl}}/organizations/me"
+          }
+        },
+        {
+          "name": "06.3 List organization members",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Members listed', () => pm.response.to.have.status(200));",
+                "const members = pm.response.json().data || [];",
+                "const member = members.find(m => m.email === 'member@acme.com');",
+                "if (member) pm.collectionVariables.set('memberId', member.id);"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/organizations/me/members"
+          }
+        },
+        {
+          "name": "06.4 Invite new member (ria.chowdhury@acme.com)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Invitation sent', () => pm.response.to.have.status(201));",
+                "console.log('Invite email sent to ria.chowdhury@acme.com — check Resend/console for token link');"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"ria.chowdhury@acme.com\",\n  \"role\": \"MEMBER\"\n}"
             },
             "url": "{{baseUrl}}/organizations/me/members/invite"
           }
         },
         {
-          "name": "Accept invitation",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"token\": \"REPLACE\",\n  \"name\": \"New Member\",\n  \"password\": \"Password123!\"\n}"
-            },
-            "url": "{{baseUrl}}/organizations/invitations/accept"
-          }
-        },
-        {
-          "name": "Update member role",
+          "name": "06.5 Change member role",
           "request": {
             "method": "PATCH",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"role\": \"ORG_ADMIN\"\n}"
+              "raw": "{\n  \"role\": \"MEMBER\"\n}"
             },
             "url": "{{baseUrl}}/organizations/me/members/{{memberId}}"
           }
         },
         {
-          "name": "Remove member",
-          "request": {
-            "method": "DELETE",
-            "url": "{{baseUrl}}/organizations/me/members/{{memberId}}"
-          }
-        }
-      ]
-    },
-    {
-      "name": "Plans",
-      "item": [
-        {
-          "name": "List public plans",
-          "request": { "method": "GET", "url": "{{baseUrl}}/plans" }
-        },
-        {
-          "name": "Create plan",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Growth\",\n  \"priceCents\": 4900,\n  \"currency\": \"usd\",\n  \"interval\": \"MONTHLY\",\n  \"features\": [\"10 seats\"]\n}"
-            },
-            "url": "{{baseUrl}}/plans"
-          }
-        },
-        {
-          "name": "Update plan",
-          "request": {
-            "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"isActive\": false\n}"
-            },
-            "url": "{{baseUrl}}/plans/{{planId}}"
-          }
-        }
-      ]
-    },
-    {
-      "name": "Subscriptions",
-      "item": [
-        {
-          "name": "My subscription",
+          "name": "06.6 View current subscription",
           "request": {
             "method": "GET",
+            "header": [],
             "url": "{{baseUrl}}/subscriptions/me"
           }
         },
         {
-          "name": "Upgrade",
+          "name": "06.7 List plans (choose upgrade target)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const plans = pm.response.json().data || [];",
+                "const pro = plans.find(p => p.name === 'Pro') || plans[plans.length - 1];",
+                "if (pro) pm.collectionVariables.set('planId', pro.id);"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/plans"
+          }
+        },
+        {
+          "name": "06.8 Upgrade subscription (returns Stripe Checkout URL)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "if (pm.response.code === 200) {",
+                "  const d = pm.response.json().data;",
+                "  if (d.checkoutUrl) {",
+                "    pm.collectionVariables.set('checkoutUrl', d.checkoutUrl);",
+                "    console.log('Upgrade checkout URL:', d.checkoutUrl);",
+                "  }",
+                "}"
+              ]
+            }
+          }],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -253,7 +528,7 @@
           }
         },
         {
-          "name": "Downgrade",
+          "name": "06.9 Downgrade subscription (optional — pick cheaper planId)",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -265,70 +540,559 @@
           }
         },
         {
-          "name": "Cancel",
+          "name": "06.10 Cancel subscription",
           "request": {
             "method": "POST",
+            "header": [],
             "url": "{{baseUrl}}/subscriptions/cancel"
           }
-        }
-      ]
-    },
-    {
-      "name": "Payments",
-      "item": [
+        },
         {
-          "name": "Register (paid onboarding)",
+          "name": "06.11 List payment history",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Payments listed', () => pm.response.to.have.status(200));",
+                "const payments = pm.response.json().data || [];",
+                "if (payments[0]) pm.collectionVariables.set('paymentId', payments[0].id);"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/payments"
+          }
+        },
+        {
+          "name": "06.12 Download invoice PDF",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/payments/{{paymentId}}/invoice"
+          }
+        },
+        {
+          "name": "06.13 Open Stripe billing portal (payment methods)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/billing/portal"
+          }
+        },
+        {
+          "name": "06.14 Organization transactions (all)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/transactions"
+          }
+        },
+        {
+          "name": "06.15 Organization transactions (filter SUCCESS)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/transactions?status=SUCCESS"
+          }
+        },
+        {
+          "name": "06.16 Organization transactions (filter FAILED)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/transactions?status=FAILED"
+          }
+        },
+        {
+          "name": "06.17 Update own profile",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sarah Ahmed\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "06.18 Change password",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organizationName\": \"New Org\",\n  \"adminName\": \"Admin\",\n  \"email\": \"admin@neworg.test\",\n  \"password\": \"Password123!\",\n  \"planId\": \"{{planId}}\"\n}"
+              "raw": "{\n  \"currentPassword\": \"Password123!\",\n  \"newPassword\": \"Password123!\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/change-password"
+          }
+        },
+        {
+          "name": "06.19 Logout Org Admin",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 — Accept Member Invitation",
+      "description": "After invite email, invited user joins with token. Paste inviteToken from email/console.",
+      "item": [
+        {
+          "name": "07.1 Accept invitation (paste inviteToken)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{inviteToken}}\",\n  \"name\": \"Ria Chowdhury\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "{{baseUrl}}/organizations/invitations/accept"
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 — Authentication (Member)",
+      "description": "Login as Acme member James Khan.",
+      "item": [
+        {
+          "name": "08.1 Login — Member (member@acme.com)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Logged in as MEMBER', () => {",
+                "  pm.response.to.have.status(200);",
+                "  pm.expect(pm.response.json().data.user.role).to.eql('MEMBER');",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"member@acme.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 — Member Panel + Forbidden Checks",
+      "description": "Member can view profile/org info. Billing, members, transactions, platform admin must be forbidden.",
+      "item": [
+        {
+          "name": "09.1 View own profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "09.2 Update own profile",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"James Khan\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "09.3 Change own password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"Password123!\",\n  \"newPassword\": \"Password123!\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/change-password"
+          }
+        },
+        {
+          "name": "09.4 View organization (read-only)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Member can view org', () => pm.response.to.have.status(200));",
+                "const org = pm.response.json().data;",
+                "pm.test('No stripe customer leaked to member view ideally', () => {",
+                "  pm.expect(org).to.have.property('name');",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/organizations/me"
+          }
+        },
+        {
+          "name": "09.5 FORBIDDEN — member management",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": ["pm.test('403 members', () => pm.response.to.have.status(403));"]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/organizations/me/members"
+          }
+        },
+        {
+          "name": "09.6 FORBIDDEN — billing payments",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": ["pm.test('403 payments', () => pm.response.to.have.status(403));"]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/payments"
+          }
+        },
+        {
+          "name": "09.7 FORBIDDEN — subscription management",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": ["pm.test('403 subscription', () => pm.response.to.have.status(403));"]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/subscriptions/me"
+          }
+        },
+        {
+          "name": "09.8 FORBIDDEN — transactions",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": ["pm.test('403 transactions', () => pm.response.to.have.status(403));"]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/transactions"
+          }
+        },
+        {
+          "name": "09.9 FORBIDDEN — platform admin stats",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": ["pm.test('403 admin', () => pm.response.to.have.status(403));"]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/admin/stats"
+          }
+        },
+        {
+          "name": "09.10 Logout Member",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 — Paid Registration (Stripe Checkout)",
+      "description": "Register NovaTech → open checkoutUrl in browser → pay 4242… → keep stripe listen running → then login.",
+      "item": [
+        {
+          "name": "10.1 List plans for registration",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const plans = pm.response.json().data || [];",
+                "const starter = plans.find(p => p.name === 'Starter') || plans[0];",
+                "if (starter) pm.collectionVariables.set('planId', starter.id);"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/plans"
+          }
+        },
+        {
+          "name": "10.2 Register NovaTech (creates Checkout)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Checkout created', () => pm.response.to.have.status(201));",
+                "const d = pm.response.json().data;",
+                "pm.collectionVariables.set('pendingId', d.pendingRegistrationId);",
+                "pm.collectionVariables.set('checkoutUrl', d.checkoutUrl);",
+                "console.log('=== OPEN IN BROWSER AND PAY ===');",
+                "console.log(d.checkoutUrl);",
+                "console.log('Card: 4242 4242 4242 4242');"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationName\": \"NovaTech Solutions\",\n  \"adminName\": \"Nadia Rahman\",\n  \"email\": \"nadia.rahman@novatech.io\",\n  \"password\": \"Password123!\",\n  \"planId\": \"{{planId}}\"\n}"
             },
             "url": "{{baseUrl}}/register"
           }
         },
         {
-          "name": "Retry registration checkout",
+          "name": "10.3 Retry checkout (if payment abandoned)",
           "request": {
             "method": "POST",
+            "header": [],
             "url": "{{baseUrl}}/register/{{pendingId}}/retry"
           }
         },
         {
-          "name": "List payments",
-          "request": { "method": "GET", "url": "{{baseUrl}}/payments" }
-        }
-      ]
-    },
-    {
-      "name": "Transactions",
-      "item": [
+          "name": "10.4 Login new Org Admin AFTER webhook (nadia.rahman@novatech.io)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "if (pm.response.code === 200) {",
+                "  pm.test('New org activated and login works', () => {",
+                "    pm.expect(pm.response.json().data.user.role).to.eql('ORG_ADMIN');",
+                "  });",
+                "} else {",
+                "  console.log('If 401/403: wait for stripe webhook, then retry this request');",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nadia.rahman@novatech.io\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
         {
-          "name": "Org transactions",
+          "name": "10.5 Verify new org subscription",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/transactions?status="
+            "header": [],
+            "url": "{{baseUrl}}/subscriptions/me"
+          }
+        },
+        {
+          "name": "10.6 Verify new org payments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/payments"
+          }
+        },
+        {
+          "name": "10.7 Verify new org transactions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/transactions?status=SUCCESS"
+          }
+        },
+        {
+          "name": "10.8 Logout new Org Admin",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/logout"
           }
         }
       ]
     },
     {
-      "name": "Webhooks",
+      "name": "11 — Tenant Isolation",
+      "description": "Nordic Soft admin must only see own data; cannot access platform admin or Acme data.",
       "item": [
         {
-          "name": "Stripe webhook (raw body + signature)",
+          "name": "11.1 Login — Nordic Soft Admin (admin@nordicsoft.com)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Nordic Soft admin logged in', () => {",
+                "  pm.response.to.have.status(200);",
+                "  pm.expect(pm.response.json().data.user.role).to.eql('ORG_ADMIN');",
+                "});"
+              ]
+            }
+          }],
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Stripe-Signature", "value": "REPLACE" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": \"evt_test\",\n  \"type\": \"checkout.session.completed\"\n}"
+              "raw": "{\n  \"email\": \"admin@nordicsoft.com\",\n  \"password\": \"Password123!\"\n}"
             },
-            "url": "http://localhost:4000/api/webhooks/stripe"
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "11.2 Nordic Soft — own organization only",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Own org returned', () => {",
+                "  pm.response.to.have.status(200);",
+                "  pm.expect(pm.response.json().data.name).to.include('Nordic');",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/organizations/me"
+          }
+        },
+        {
+          "name": "11.3 Nordic Soft — own transactions only",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/transactions"
+          }
+        },
+        {
+          "name": "11.4 FORBIDDEN — platform organizations list",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": ["pm.test('403 platform orgs', () => pm.response.to.have.status(403));"]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/admin/organizations"
+          }
+        },
+        {
+          "name": "11.5 FORBIDDEN — platform stats",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": ["pm.test('403 platform stats', () => pm.response.to.have.status(403));"]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/admin/stats"
+          }
+        },
+        {
+          "name": "11.6 Logout Nordic Soft Admin",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 — Password Reset Flow",
+      "description": "Forgot password → email/console token → reset password.",
+      "item": [
+        {
+          "name": "12.1 Forgot password (admin@acme.com)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Forgot password accepted', () => pm.response.to.have.status(200));",
+                "console.log('Check Resend inbox or backend console for reset link token');"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@acme.com\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/forgot-password"
+          }
+        },
+        {
+          "name": "12.2 Reset password (paste token from email)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"PASTE_RESET_TOKEN_HERE\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/reset-password"
+          }
+        },
+        {
+          "name": "12.3 Login after reset (admin@acme.com)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@acme.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
           }
         }
       ]

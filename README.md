@@ -159,7 +159,7 @@ npm install
 npx prisma migrate deploy
 npm run prisma:seed
 npm run dev
-# API: http://localhost:4000
+# API: http://localhost:5000
 
 # 3) Frontend (new terminal)
 cd frontend
@@ -172,7 +172,7 @@ npm run dev
 ### Stripe webhooks locally
 
 ```bash
-stripe listen --forward-to localhost:4000/api/webhooks/stripe
+stripe listen --forward-to localhost:5000/api/webhooks/stripe
 ```
 
 Put the printed webhook signing secret into `STRIPE_WEBHOOK_SECRET`.
@@ -211,17 +211,51 @@ npm run build
 
 Password for all seeded users: `Password123!`
 
-| Role | Email |
-|------|-------|
-| Platform Admin | `platform.admin@orgflow.test` |
-| Organization Admin | `org.admin@acme.test` |
-| Organization Member | `member@acme.test` |
+| Role | Name | Email |
+|------|------|-------|
+| Platform Admin | Hasnath Platform Admin | `admin@orgflow.com` |
+| Organization Admin | Sarah Ahmed | `admin@acme.com` |
+| Organization Member | James Khan | `member@acme.com` |
 
-Additional seed org for isolation demos: `org.admin@beta.test` (same password).
+Tenant-isolation demo org: Nordic Soft Ltd — `admin@nordicsoft.com` (same password).
+
+### Paid registration demo (UI / Postman)
+
+| Field | Value |
+|-------|--------|
+| Organization | NovaTech Solutions |
+| Admin name | Nadia Rahman |
+| Email | `nadia.rahman@novatech.io` |
+| Password | `Password123!` |
+| Stripe test card | `4242 4242 4242 4242` |
 
 ## Postman
 
-Import [`postman/OrgFlow.postman_collection.json`](postman/OrgFlow.postman_collection.json). Enable the cookie jar after login.
+Import [`postman/OrgFlow.postman_collection.json`](postman/OrgFlow.postman_collection.json).
+
+**Run folders in order (01 → 12):**
+
+| # | Folder | What it covers |
+|---|--------|----------------|
+| 01 | Health Check | API up |
+| 02 | Public Plans | Plans before login |
+| 03 | Auth — Platform Admin | Login, me, refresh, invalid login |
+| 04 | Platform Admin Panel | Stats, orgs, plans CRUD, transactions, suspend/reactivate |
+| 05 | Auth — Org Admin | Login as Acme admin |
+| 06 | Organization Admin Panel | Profile, members, invite, subscription, billing, invoice, transactions |
+| 07 | Accept Invitation | Join with invite token |
+| 08 | Auth — Member | Login as member |
+| 09 | Member + Forbidden | Profile OK; billing/members/admin blocked |
+| 10 | Paid Registration | Stripe Checkout → webhook → new org login |
+| 11 | Tenant Isolation | Nordic Soft cannot see Acme / platform data |
+| 12 | Password Reset | Forgot + reset flow |
+
+1. `baseUrl` = `http://localhost:5000/api`
+2. Enable **Cookies** in Postman
+3. Collection Runner: run `01–06`, `08–09`, `11` automatically
+4. Folder `10` needs browser payment + `stripe listen`
+5. Folders `07` / `12` need token from email/console
+
 
 ## Deployment
 

@@ -67,8 +67,8 @@ async function main() {
 
   await prisma.user.create({
     data: {
-      email: 'platform.admin@orgflow.test',
-      name: 'Platform Admin',
+      email: 'admin@orgflow.com',
+      name: 'Hasnath Platform Admin',
       passwordHash,
       role: Role.PLATFORM_ADMIN,
       status: UserStatus.ACTIVE,
@@ -77,9 +77,9 @@ async function main() {
 
   const org = await prisma.organization.create({
     data: {
-      name: 'Acme Corp',
-      contactEmail: 'admin@acme.test',
-      billingEmail: 'billing@acme.test',
+      name: 'Acme Corporation',
+      contactEmail: 'contact@acme.com',
+      billingEmail: 'billing@acme.com',
       contactPhone: '+1-555-0100',
       status: OrgStatus.ACTIVE,
     },
@@ -87,8 +87,8 @@ async function main() {
 
   await prisma.user.create({
     data: {
-      email: 'org.admin@acme.test',
-      name: 'Org Admin',
+      email: 'admin@acme.com',
+      name: 'Sarah Ahmed',
       passwordHash,
       role: Role.ORG_ADMIN,
       status: UserStatus.ACTIVE,
@@ -98,8 +98,8 @@ async function main() {
 
   await prisma.user.create({
     data: {
-      email: 'member@acme.test',
-      name: 'Org Member',
+      email: 'member@acme.com',
+      name: 'James Khan',
       passwordHash,
       role: Role.MEMBER,
       status: UserStatus.ACTIVE,
@@ -140,20 +140,19 @@ async function main() {
     },
   });
 
-  // Second org for tenant isolation demos/tests
   const orgB = await prisma.organization.create({
     data: {
-      name: 'Beta Inc',
-      contactEmail: 'admin@beta.test',
-      billingEmail: 'billing@beta.test',
+      name: 'Nordic Soft Ltd',
+      contactEmail: 'hello@nordicsoft.com',
+      billingEmail: 'billing@nordicsoft.com',
       status: OrgStatus.ACTIVE,
     },
   });
 
   await prisma.user.create({
     data: {
-      email: 'org.admin@beta.test',
-      name: 'Beta Admin',
+      email: 'admin@nordicsoft.com',
+      name: 'Erik Johansson',
       passwordHash,
       role: Role.ORG_ADMIN,
       status: UserStatus.ACTIVE,
@@ -172,10 +171,11 @@ async function main() {
   });
 
   console.log('Seed complete.');
-  console.log('Test credentials (password for all: Password123!):');
-  console.log('  Platform Admin: platform.admin@orgflow.test');
-  console.log('  Org Admin:      org.admin@acme.test');
-  console.log('  Member:         member@acme.test');
+  console.log('Password for all users: Password123!');
+  console.log('  Platform Admin: admin@orgflow.com');
+  console.log('  Org Admin:      admin@acme.com');
+  console.log('  Member:         member@acme.com');
+  console.log('  Isolation org:  admin@nordicsoft.com');
   console.log(`  Sample subscription: ${subscription.id}`);
 }
 

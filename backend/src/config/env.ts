@@ -23,6 +23,7 @@ const envSchema = z.object({
   STRIPE_CANCEL_URL: z.string().url(),
   RESEND_API_KEY: z.string().optional().default(''),
   EMAIL_FROM: z.string().default('OrgFlow <onboarding@resend.dev>'),
+  EMAIL_DEV_OVERRIDE_TO: z.string().optional().default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -53,4 +54,5 @@ export const env = (parsed.success
       STRIPE_CANCEL_URL: 'http://localhost:3000/checkout/cancel',
       RESEND_API_KEY: '',
       EMAIL_FROM: 'OrgFlow <onboarding@resend.dev>',
+      EMAIL_DEV_OVERRIDE_TO: '',
     } as z.infer<typeof envSchema>));
