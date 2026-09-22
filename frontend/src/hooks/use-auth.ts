@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import { authApi, type LoginInput } from '@/lib/api/auth';
 import { getRoleHomePath, userHasRole } from '@/lib/auth-utils';
 import type { Role, User } from '@/lib/types';
+import { ApiError } from '@/lib/api/client';
+import { toast } from '@/components/ui/toast';
 
 type AuthUser = User | null;
-import { ApiError } from '@/lib/api/client';
 
 export const AUTH_QUERY_KEY = ['auth', 'me'] as const;
 
@@ -28,14 +29,24 @@ export function useAuth() {
       }
     },
     retry: false,
-    staleTime: 60_000,
+    // Always re-check the cookie-backed session so multi-tab logins
+    // cannot leave a stale role in the shell (e.g. Platform UI + Org cookie → 403).
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   const loginMutation = useMutation({
     mutationFn: (input: LoginInput) => authApi.login(input),
     onSuccess: (data) => {
+      queryClient.clear();
       queryClient.setQueryData(AUTH_QUERY_KEY, data.user);
+      toast.success(`Welcome back, ${data.user.name}`);
       router.replace(getRoleHomePath(data.user.role));
+    },
+    onError: (err) => {
+      const message = err instanceof ApiError ? err.message : 'Login failed';
+      toast.error(message);
     },
   });
 
@@ -44,7 +55,11 @@ export function useAuth() {
     onSuccess: () => {
       queryClient.setQueryData(AUTH_QUERY_KEY, null);
       queryClient.clear();
+      toast.info('Signed out successfully');
       router.replace('/login');
+    },
+    onError: () => {
+      toast.error('Could not sign out. Please try again.');
     },
   });
 

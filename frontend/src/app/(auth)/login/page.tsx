@@ -7,10 +7,12 @@ import { z } from 'zod';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/use-auth';
 import { ApiError } from '@/lib/api/client';
+import { SearchParamsBoundary } from '@/components/common/SearchParamsBoundary';
 
 const schema = z.object({
   email: z.string().email('Enter a valid email'),
@@ -18,8 +20,6 @@ const schema = z.object({
 });
 
 type FormValues = z.infer<typeof schema>;
-
-import { SearchParamsBoundary } from '@/components/common/SearchParamsBoundary';
 
 function LoginPageContent() {
   const { login, isLoggingIn, loginError } = useAuth();
@@ -49,39 +49,69 @@ function LoginPageContent() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle>Sign in</CardTitle>
+        <CardTitle className="text-xl">Sign in</CardTitle>
         <CardDescription>Access your OrgFlow workspace</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {errorMessage && (
-            <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{errorMessage}</div>
-          )}
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+          {errorMessage ? (
+            <div
+              role="alert"
+              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+            >
+              {errorMessage}
+            </div>
+          ) : null}
+
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" autoComplete="email" {...register('email')} />
-            {errors.email && <p className="text-xs text-red-600">{errors.email.message}</p>}
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              aria-invalid={!!errors.email}
+              aria-describedby={errors.email ? 'email-error' : undefined}
+              {...register('email')}
+            />
+            {errors.email ? (
+              <p id="email-error" className="text-xs text-red-600" role="alert">
+                {errors.email.message}
+              </p>
+            ) : null}
           </div>
+
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" autoComplete="current-password" {...register('password')} />
-            {errors.password && <p className="text-xs text-red-600">{errors.password.message}</p>}
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              <Link href="/forgot-password" className="text-xs font-medium text-[var(--primary)] hover:underline">
+                Forgot password?
+              </Link>
+            </div>
+            <PasswordInput
+              id="password"
+              autoComplete="current-password"
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? 'password-error' : undefined}
+              {...register('password')}
+            />
+            {errors.password ? (
+              <p id="password-error" className="text-xs text-red-600" role="alert">
+                {errors.password.message}
+              </p>
+            ) : null}
           </div>
+
           <Button type="submit" className="w-full" disabled={isLoggingIn}>
-            {isLoggingIn ? 'Signing in...' : 'Sign in'}
+            {isLoggingIn ? 'Signing in…' : 'Sign in'}
           </Button>
         </form>
-        <div className="mt-4 flex flex-col gap-2 text-center text-sm text-slate-500">
-          <Link href="/forgot-password" className="text-teal-700 hover:underline">
-            Forgot password?
+
+        <p className="mt-5 text-center text-sm text-slate-500">
+          New organization?{' '}
+          <Link href="/register" className="font-medium text-[var(--primary)] hover:underline">
+            Create an account
           </Link>
-          <p>
-            New organization?{' '}
-            <Link href="/register" className="font-medium text-teal-700 hover:underline">
-              Register
-            </Link>
-          </p>
-        </div>
+        </p>
       </CardContent>
     </Card>
   );

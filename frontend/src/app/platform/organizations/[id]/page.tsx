@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/common/DataTable';
 import { formatDate } from '@/lib/utils';
 import type { OrgStatus } from '@/lib/types';
+import { toast } from '@/components/ui/toast';
+import { ApiError } from '@/lib/api/client';
 
 export default function PlatformOrganizationDetailPage() {
   const params = useParams();
@@ -28,10 +30,16 @@ export default function PlatformOrganizationDetailPage() {
 
   const statusMutation = useMutation({
     mutationFn: (status: OrgStatus) => adminApi.updateOrgStatus(id, status),
-    onSuccess: () => {
+    onSuccess: (_data, status) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'organization', id] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'organizations'] });
       setConfirmAction(null);
+      toast.success(
+        status === 'SUSPENDED' ? 'Organization suspended' : 'Organization reactivated',
+      );
+    },
+    onError: (err) => {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to update organization status');
     },
   });
 
@@ -67,22 +75,26 @@ export default function PlatformOrganizationDetailPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Details</CardTitle>
+            <CardTitle>Organization info</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-3">
               <span className="text-slate-500">Status</span>
               <StatusBadge status={org.status} />
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Contact email</span>
-              <span>{org.contactEmail ?? '—'}</span>
+            <div className="flex justify-between gap-3">
+              <span className="shrink-0 text-slate-500">Contact email</span>
+              <span className="truncate text-right" title={org.contactEmail ?? undefined}>
+                {org.contactEmail ?? '—'}
+              </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Billing email</span>
-              <span>{org.billingEmail ?? '—'}</span>
+            <div className="flex justify-between gap-3">
+              <span className="shrink-0 text-slate-500">Billing email</span>
+              <span className="truncate text-right" title={org.billingEmail ?? undefined}>
+                {org.billingEmail ?? '—'}
+              </span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-3">
               <span className="text-slate-500">Created</span>
               <span>{org.createdAt ? formatDate(org.createdAt) : '—'}</span>
             </div>
@@ -100,10 +112,10 @@ export default function PlatformOrganizationDetailPage() {
                   <span className="text-slate-500">Plan:</span>{' '}
                   {org.subscriptions[0].plan.name}
                 </p>
-                <p>
-                  <span className="text-slate-500">Status:</span>{' '}
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500">Status:</span>
                   <StatusBadge status={org.subscriptions[0].status} />
-                </p>
+                </div>
               </div>
             ) : (
               <p className="text-slate-500">No subscription on file</p>
@@ -121,10 +133,23 @@ export default function PlatformOrganizationDetailPage() {
             data={users}
             getRowKey={(row) => row.id}
             emptyTitle="No members"
+            emptyDescription="This organization has no users yet."
             columns={[
               { key: 'name', header: 'Name', cell: (row) => row.name },
-              { key: 'email', header: 'Email', cell: (row) => row.email },
-              { key: 'role', header: 'Role', cell: (row) => row.role },
+              {
+                key: 'email',
+                header: 'Email',
+                cell: (row) => (
+                  <span className="block max-w-[220px] truncate" title={row.email}>
+                    {row.email}
+                  </span>
+                ),
+              },
+              {
+                key: 'role',
+                header: 'Role',
+                cell: (row) => row.role.replace(/_/g, ' '),
+              },
               { key: 'status', header: 'Status', cell: (row) => <StatusBadge status={row.status} /> },
             ]}
           />

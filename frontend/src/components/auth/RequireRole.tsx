@@ -32,7 +32,7 @@ export function RequireRole({ roles, children }: RequireRoleProps) {
   }, [user, isLoading, roles, router]);
 
   if (isLoading) {
-    return <LoadingState message="Checking access..." />;
+    return <LoadingState message="Checking access…" />;
   }
 
   if (error) {
@@ -42,7 +42,7 @@ export function RequireRole({ roles, children }: RequireRoleProps) {
   }
 
   if (!allowed) {
-    return <LoadingState message="Redirecting..." />;
+    return <LoadingState message="Redirecting…" />;
   }
 
   return <>{children}</>;

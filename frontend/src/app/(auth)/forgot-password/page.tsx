@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { authApi } from '@/lib/api/auth';
+import { toast } from '@/components/ui/toast';
+import { ApiError } from '@/lib/api/client';
 
 const schema = z.object({
   email: z.string().email('Enter a valid email'),
@@ -18,7 +20,15 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function ForgotPasswordPage() {
-  const mutation = useMutation({ mutationFn: (email: string) => authApi.forgotPassword(email) });
+  const mutation = useMutation({
+    mutationFn: (email: string) => authApi.forgotPassword(email),
+    onSuccess: (data) => {
+      toast.success(data.message || 'If an account exists, a reset email has been sent.');
+    },
+    onError: (err) => {
+      toast.error(err instanceof ApiError ? err.message : 'Could not send reset email');
+    },
+  });
 
   const {
     register,
@@ -29,28 +39,41 @@ export default function ForgotPasswordPage() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle>Reset password</CardTitle>
-        <CardDescription>We will email you a reset link if an account exists</CardDescription>
+        <CardTitle className="text-xl">Forgot password</CardTitle>
+        <CardDescription>
+          Enter your email and we will send a reset link if an account exists.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {mutation.isSuccess ? (
           <div className="space-y-4">
-            <div className="rounded-md bg-teal-50 px-3 py-2 text-sm text-teal-800">
+            <div
+              role="status"
+              className="rounded-lg border border-[#c5ddd8] bg-[#e8f2f0] px-3 py-2 text-sm text-[#14534c]"
+            >
               {mutation.data.message}
             </div>
-            <Link href="/login" className="block text-center text-sm text-teal-700 hover:underline">
+            <Link href="/login" className="block text-center text-sm font-medium text-[var(--primary)] hover:underline">
               Back to sign in
             </Link>
           </div>
         ) : (
-          <form onSubmit={handleSubmit((v) => mutation.mutate(v.email))} className="space-y-4">
+          <form
+            onSubmit={handleSubmit((v) => mutation.mutate(v.email))}
+            className="space-y-4"
+            noValidate
+          >
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" {...register('email')} />
-              {errors.email && <p className="text-xs text-red-600">{errors.email.message}</p>}
+              <Input id="email" type="email" autoComplete="email" {...register('email')} />
+              {errors.email ? (
+                <p className="text-xs text-red-600" role="alert">
+                  {errors.email.message}
+                </p>
+              ) : null}
             </div>
             <Button type="submit" className="w-full" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Sending...' : 'Send reset link'}
+              {mutation.isPending ? 'Sending…' : 'Send reset link'}
             </Button>
             <Link href="/login" className="block text-center text-sm text-slate-500 hover:underline">
               Back to sign in

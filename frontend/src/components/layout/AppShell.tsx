@@ -39,17 +39,36 @@ const navConfig: Record<AppShellVariant, NavItem[]> = {
   ],
   organization: [
     { href: '/organization', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/organization/profile', label: 'Profile', icon: Settings },
+    { href: '/organization/profile', label: 'Organization', icon: Building2 },
     { href: '/organization/members', label: 'Members', icon: Users },
     { href: '/organization/subscription', label: 'Subscription', icon: Package },
     { href: '/organization/billing', label: 'Billing', icon: CreditCard },
     { href: '/organization/transactions', label: 'Transactions', icon: Receipt },
   ],
   member: [
-    { href: '/member', label: 'Profile', icon: User },
+    { href: '/member', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/member/profile', label: 'Profile', icon: User },
     { href: '/member/organization', label: 'Organization', icon: Building2 },
   ],
 };
+
+const accountHref: Partial<Record<AppShellVariant, string>> = {
+  organization: '/organization/account',
+  platform: undefined,
+  member: '/member/profile',
+};
+
+function pageTitleFromPath(pathname: string, items: NavItem[], shellTitle: string) {
+  const exact = items.find((item) => item.href === pathname);
+  if (exact) return exact.label;
+  const nested = [...items]
+    .filter((item) => item.href !== items[0]?.href)
+    .sort((a, b) => b.href.length - a.href.length)
+    .find((item) => pathname.startsWith(item.href));
+  if (nested) return nested.label;
+  if (pathname.includes('/account')) return 'Profile';
+  return shellTitle;
+}
 
 interface AppShellProps {
   variant: AppShellVariant;
@@ -62,47 +81,59 @@ export function AppShell({ variant, children }: AppShellProps) {
   const sidebarOpen = useSelector((state: RootState) => state.ui.sidebarOpen);
   const { user, logout, isLoggingOut } = useAuth();
   const items = navConfig[variant];
+  const profileHref = accountHref[variant];
 
-  const title =
+  const shellTitle =
     variant === 'platform'
       ? 'Platform Admin'
       : variant === 'organization'
-        ? 'Organization'
-        : 'Member Portal';
+        ? 'Organization Admin'
+        : 'Member';
+
+  const pageTitle = pageTitleFromPath(pathname, items, shellTitle);
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-slate-900/50 lg:hidden"
+    <div className="min-h-screen bg-[var(--background)]">
+      {sidebarOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-slate-950/50 lg:hidden"
+          aria-label="Close navigation"
           onClick={() => dispatch(setSidebarOpen(false))}
         />
-      )}
+      ) : null}
 
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-slate-200 bg-white transition-transform lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-[var(--sidebar)] text-[var(--sidebar-foreground)] transition-transform duration-200 lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
         )}
+        aria-label="Main navigation"
       >
-        <div className="flex h-16 items-center justify-between border-b border-slate-200 px-4">
-          <Link href={items[0].href} className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-teal-600 text-sm font-bold text-white">
+        <div className="flex h-16 items-center justify-between border-b border-[var(--sidebar-border)] px-4">
+          <Link href={items[0].href} className="flex min-w-0 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)] text-sm font-bold text-white">
               OF
             </div>
-            <span className="font-semibold text-slate-900">OrgFlow</span>
+            <div className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-white">OrgFlow</span>
+              <span className="block truncate text-[11px] text-[var(--sidebar-muted)]">
+                {shellTitle}
+              </span>
+            </div>
           </Link>
           <Button
             variant="ghost"
             size="icon"
-            className="lg:hidden"
+            className="shrink-0 text-slate-300 hover:bg-[var(--sidebar-hover)] hover:text-white lg:hidden"
             onClick={() => dispatch(setSidebarOpen(false))}
+            aria-label="Close menu"
           >
             <X className="h-5 w-5" />
           </Button>
         </div>
 
-        <nav className="flex-1 space-y-1 p-3">
+        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {items.map((item) => {
             const active =
               pathname === item.href ||
@@ -113,46 +144,84 @@ export function AppShell({ variant, children }: AppShellProps) {
                 key={item.href}
                 href={item.href}
                 onClick={() => dispatch(setSidebarOpen(false))}
+                aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                   active
-                    ? 'bg-teal-50 text-teal-700'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                    ? 'bg-[var(--sidebar-active)] text-[var(--sidebar-active-text)]'
+                    : 'text-slate-300 hover:bg-[var(--sidebar-hover)] hover:text-white',
                 )}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
                 {item.label}
               </Link>
             );
           })}
         </nav>
 
-        <div className="border-t border-slate-200 p-4">
-          <p className="truncate text-sm font-medium text-slate-900">{user?.name}</p>
-          <p className="truncate text-xs text-slate-500">{user?.email}</p>
+        <div className="space-y-2 border-t border-[var(--sidebar-border)] p-4">
+          {profileHref ? (
+            <Link
+              href={profileHref}
+              onClick={() => dispatch(setSidebarOpen(false))}
+              className={cn(
+                'flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-slate-300 hover:bg-[var(--sidebar-hover)] hover:text-white',
+                pathname.startsWith(profileHref) && 'bg-[var(--sidebar-active)] text-white',
+              )}
+            >
+              <Settings className="h-4 w-4" aria-hidden />
+              Profile
+            </Link>
+          ) : null}
+          <div className="px-2">
+            <p className="truncate text-sm font-medium text-white">{user?.name}</p>
+            <p className="truncate text-xs text-[var(--sidebar-muted)]">{user?.email}</p>
+          </div>
         </div>
       </aside>
 
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 sm:px-6">
-          <div className="flex items-center gap-3">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-[var(--border)] bg-white px-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden"
+              className="shrink-0 lg:hidden"
               onClick={() => dispatch(toggleSidebar())}
+              aria-label="Open menu"
             >
               <Menu className="h-5 w-5" />
             </Button>
-            <span className="text-sm font-medium text-slate-500">{title}</span>
+            <div className="min-w-0">
+              <p className="truncate text-xs text-slate-500">{shellTitle}</p>
+              <h1 className="truncate text-base font-semibold text-slate-900 sm:text-lg">
+                {pageTitle}
+              </h1>
+            </div>
           </div>
-          <Button variant="outline" size="sm" onClick={() => logout()} disabled={isLoggingOut}>
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            {profileHref ? (
+              <Link href={profileHref} className="hidden sm:inline-flex">
+                <Button variant="ghost" size="sm" aria-label="Open profile">
+                  <User className="h-4 w-4" />
+                  <span className="max-w-[120px] truncate">{user?.name?.split(' ')[0]}</span>
+                </Button>
+              </Link>
+            ) : null}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => logout()}
+              disabled={isLoggingOut}
+              aria-label="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign out</span>
+            </Button>
+          </div>
         </header>
 
-        <main className="p-4 sm:p-6 lg:p-8">{children}</main>
+        <main className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
     </div>
   );

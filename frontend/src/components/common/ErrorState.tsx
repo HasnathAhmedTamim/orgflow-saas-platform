@@ -11,24 +11,30 @@ interface ErrorStateProps {
 
 export function ErrorState({
   title = 'Something went wrong',
-  message = 'Unable to load this content. Please try again.',
+  message = "We couldn't load this content. Please try again.",
   onRetry,
   className,
 }: ErrorStateProps) {
   return (
-    <div className={cn('flex flex-col items-center justify-center gap-3 py-16 text-center', className)}>
-      <div className="rounded-full bg-red-50 p-4">
-        <AlertCircle className="h-8 w-8 text-red-500" />
+    <div
+      className={cn(
+        'flex flex-col items-center justify-center gap-4 rounded-xl border border-red-100 bg-red-50/40 px-6 py-14 text-center',
+        className,
+      )}
+      role="alert"
+    >
+      <div className="rounded-full bg-white p-3 shadow-sm ring-1 ring-red-100">
+        <AlertCircle className="h-6 w-6 text-red-600" aria-hidden />
       </div>
-      <div>
+      <div className="max-w-md">
         <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-        <p className="mt-1 max-w-md text-sm text-slate-500">{message}</p>
+        <p className="mt-1 text-sm leading-relaxed text-slate-600">{message}</p>
       </div>
-      {onRetry && (
+      {onRetry ? (
         <Button variant="outline" onClick={onRetry}>
           Try again
         </Button>
-      )}
+      ) : null}
     </div>
   );
 }

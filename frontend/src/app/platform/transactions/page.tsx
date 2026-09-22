@@ -84,16 +84,21 @@ export default function PlatformTransactionsPage() {
         <ErrorState onRetry={() => txQuery.refetch()} />
       ) : (
         <>
-          <div className="rounded-lg border border-slate-200 bg-white">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             <DataTable
               data={txQuery.data?.items ?? []}
               getRowKey={(row) => row.id}
               emptyTitle="No transactions"
+              emptyDescription="Platform payment activity will appear here."
               columns={[
                 {
                   key: 'org',
                   header: 'Organization',
-                  cell: (row) => row.organization?.name ?? row.organizationId,
+                  cell: (row) => (
+                    <span className="block max-w-[180px] truncate font-medium" title={row.organization?.name ?? row.organizationId}>
+                      {row.organization?.name ?? row.organizationId}
+                    </span>
+                  ),
                 },
                 { key: 'type', header: 'Type', cell: (row) => row.type },
                 {
@@ -102,6 +107,15 @@ export default function PlatformTransactionsPage() {
                   cell: (row) => formatCurrency(row.amountCents, row.currency),
                 },
                 { key: 'status', header: 'Status', cell: (row) => <StatusBadge status={row.status} /> },
+                {
+                  key: 'ref',
+                  header: 'Reference',
+                  cell: (row) => (
+                    <span className="font-mono text-xs text-slate-500" title={row.id}>
+                      {row.id.slice(0, 8)}…
+                    </span>
+                  ),
+                },
                 { key: 'date', header: 'Date', cell: (row) => formatDateTime(row.createdAt) },
               ]}
             />

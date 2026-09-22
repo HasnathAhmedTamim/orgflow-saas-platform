@@ -17,6 +17,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
 import type { Plan } from '@/lib/types';
+import { toast } from '@/components/ui/toast';
+import { ApiError } from '@/lib/api/client';
 
 const planSchema = z.object({
   name: z.string().min(2),
@@ -45,6 +47,10 @@ export default function PlatformPlansPage() {
       queryClient.invalidateQueries({ queryKey: ['plans'] });
       reset();
       setEditing(null);
+      toast.success('Plan created');
+    },
+    onError: (err) => {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to create plan');
     },
   });
 
@@ -55,6 +61,10 @@ export default function PlatformPlansPage() {
       queryClient.invalidateQueries({ queryKey: ['plans'] });
       reset();
       setEditing(null);
+      toast.success('Plan updated');
+    },
+    onError: (err) => {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to update plan');
     },
   });
 
@@ -115,8 +125,11 @@ export default function PlatformPlansPage() {
               data={plansQuery.data ?? []}
               getRowKey={(row) => row.id}
               emptyTitle="No plans yet"
+              emptyDescription="Create your first subscription plan to start onboarding organizations."
               columns={[
-                { key: 'name', header: 'Name', cell: (row) => row.name },
+                { key: 'name', header: 'Name', cell: (row) => (
+                  <span className="font-medium text-slate-900">{row.name}</span>
+                ) },
                 {
                   key: 'price',
                   header: 'Price',

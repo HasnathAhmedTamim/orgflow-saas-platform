@@ -20,6 +20,7 @@ interface DataTableProps<T> {
   data: T[];
   emptyTitle?: string;
   emptyDescription?: string;
+  emptyAction?: React.ReactNode;
   getRowKey: (row: T) => string;
 }
 
@@ -28,34 +29,39 @@ export function DataTable<T>({
   data,
   emptyTitle,
   emptyDescription,
+  emptyAction,
   getRowKey,
 }: DataTableProps<T>) {
   if (data.length === 0) {
-    return <EmptyState title={emptyTitle} description={emptyDescription} />;
+    return (
+      <EmptyState title={emptyTitle} description={emptyDescription} action={emptyAction} />
+    );
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          {columns.map((col) => (
-            <TableHead key={col.key} className={col.className}>
-              {col.header}
-            </TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {data.map((row) => (
-          <TableRow key={getRowKey(row)}>
+    <div className="w-full overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
             {columns.map((col) => (
-              <TableCell key={col.key} className={col.className}>
-                {col.cell(row)}
-              </TableCell>
+              <TableHead key={col.key} className={col.className}>
+                {col.header}
+              </TableHead>
             ))}
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {data.map((row) => (
+            <TableRow key={getRowKey(row)}>
+              {columns.map((col) => (
+                <TableCell key={col.key} className={col.className}>
+                  {col.cell(row)}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
