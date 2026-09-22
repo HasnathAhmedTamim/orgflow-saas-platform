@@ -22,6 +22,13 @@ export function setAuthCookies(res: Response, accessToken: string, refreshToken:
 }
 
 export function clearAuthCookies(res: Response) {
-  res.clearCookie(ACCESS_COOKIE, { path: '/' });
-  res.clearCookie(REFRESH_COOKIE, { path: '/' });
+  // Must match set options (sameSite/secure) or the browser keeps the cookie.
+  const clearOpts: CookieOptions = {
+    httpOnly: true,
+    secure: env.COOKIE_SECURE || isProd,
+    sameSite: isProd ? 'none' : 'lax',
+    path: '/',
+  };
+  res.clearCookie(ACCESS_COOKIE, clearOpts);
+  res.clearCookie(REFRESH_COOKIE, clearOpts);
 }

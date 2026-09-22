@@ -6,7 +6,11 @@ const PROTECTED_PREFIXES = ['/platform', '/organization', '/member'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const hasSession = request.cookies.has('orgflow_refresh');
+  // Refresh alone is not enough — after logout / expired access it can linger and
+  // would bounce /login → / forever while /api/auth/me returns 401.
+  const hasAccess = request.cookies.has('orgflow_access');
+  const hasRefresh = request.cookies.has('orgflow_refresh');
+  const hasSession = hasAccess || hasRefresh;
 
   const isProtected = PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
   const isAuthPage = AUTH_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
@@ -17,7 +21,9 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (hasSession && isAuthPage) {
+  // Only skip auth pages when access cookie is present (likely still logged in).
+  // Orphaned refresh cookies must not block Sign in / Register.
+  if (hasAccess && isAuthPage) {
     return NextResponse.redirect(new URL('/', request.url));
   }
 
