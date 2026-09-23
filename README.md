@@ -15,6 +15,17 @@ Organizations onboard through **paid Stripe Checkout**. Tenants activate only af
 
 **Default local ports:** frontend `3000` · API `5000`
 
+### Live demo
+
+| Surface | URL |
+|---------|-----|
+| App (Vercel) | https://orgflow-saas-platform.vercel.app |
+| API (Render) | https://orgflow-saas-platform.onrender.com |
+| Health | https://orgflow-saas-platform.onrender.com/api/health |
+
+Seeded logins (same as local): see [Test credentials](#test-credentials).  
+**Note:** Render free tier sleeps when idle — the first request after idle can take ~30–60s.
+
 ---
 
 ## Table of contents
@@ -67,17 +78,18 @@ Organizations onboard through **paid Stripe Checkout**. Tenants activate only af
 ## Architecture
 
 ```text
-┌─────────────────┐  HTTPS + HTTP-only cookies  ┌──────────────────┐
-│  Next.js (FE)   │ ───────────────────────────► │  Express API     │
-│  :3000 / Vercel │                              │  :5000 / Render  │
-└─────────────────┘                              └────────┬─────────┘
-                                                          │
-                                    ┌─────────────────────┼─────────────────────┐
-                                    ▼                     ▼                     ▼
-                              PostgreSQL               Stripe                Resend
-                              (Prisma/Neon)         Checkout+WH             Email
+┌─────────────────┐  HTTPS + cookies (same-origin /api)  ┌──────────────────┐
+│  Next.js (FE)   │ ──── /api proxy on Vercel ─────────► │  Express API     │
+│  Vercel         │                                      │  Render          │
+└─────────────────┘                                      └────────┬─────────┘
+                                                                  │
+                                        ┌─────────────────────────┼─────────────────────┐
+                                        ▼                         ▼                     ▼
+                                  PostgreSQL                   Stripe                Resend
+                                  (Prisma/Neon)             Checkout+WH             Email
 ```
 
+In production the browser calls **`/api/*` on the Vercel host**. A Next.js route handler proxies to Render so HTTP-only auth cookies are first-party (required for Next middleware session checks). Stripe webhooks still hit Render directly.
 | Concern | Approach |
 |---------|----------|
 | Backend layering | `Route → Middleware → Controller → Service → Prisma` |
@@ -302,9 +314,10 @@ See `backend/.env.example` and `frontend/.env.example`.
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Payments + webhook verify |
 | `STRIPE_SUCCESS_URL` / `STRIPE_CANCEL_URL` | Checkout redirects |
 | `RESEND_API_KEY` / `EMAIL_FROM` | Outbound email |
-| `EMAIL_DEV_OVERRIDE_TO` | Optional local email redirect |
-| `NEXT_PUBLIC_API_URL` | Frontend → API base (`…/api`) |
-| `NEXT_PUBLIC_APP_URL` | Frontend app origin |
+| `EMAIL_DEV_OVERRIDE_TO` | Optional email redirect (leave empty in production unless demoing) |
+| `NEXT_PUBLIC_API_URL` | Local: `http://localhost:5000/api` · Production (Vercel): **`/api`** |
+| `NEXT_PUBLIC_APP_URL` | Frontend origin (local or Vercel URL) |
+| `API_PROXY_TARGET` | Optional (Vercel): Render origin for the `/api` proxy (defaults to the deployed API host) |
 
 ---
 
@@ -401,15 +414,67 @@ Run folders **01 → 12** in order:
 
 ## CI/CD & deployment
 
-| Service | Suggested target |
-|---------|------------------|
-| Frontend | Vercel |
-| Backend | Render |
-| Database | Neon PostgreSQL |
-| Payments | Stripe (test → live) |
-| Email | Resend |
+| Service | Target | URL |
+|---------|--------|-----|
+| Frontend | Vercel | https://orgflow-saas-platform.vercel.app |
+| Backend | Render (Node, root `backend`) | https://orgflow-saas-platform.onrender.com |
+| Database | Neon PostgreSQL | — |
+| Payments | Stripe test mode | Webhook → Render |
+| Email | Resend | — |
+| CI | GitHub Actions | Lint / test / build on push & PR |
 
-Production checklist: `COOKIE_SECURE=true`, matching `FRONTEND_URL` / CORS origin, and Stripe webhook endpoint `https://<api-host>/api/webhooks/stripe`.
+`git push` to `master` triggers **auto-deploy** on Vercel and Render (when connected).
+
+### Production env (summary)
+
+**Render (backend)** — set at least:
+
+```text
+NODE_ENV=production
+COOKIE_SECURE=true
+DATABASE_URL=<neon>
+FRONTEND_URL=https://orgflow-saas-platform.vercel.app
+BACKEND_URL=https://orgflow-saas-platform.onrender.com
+JWT_ACCESS_SECRET=<random 32+>
+JWT_REFRESH_SECRET=<random 32+>
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...   # from Stripe endpoint on Render URL
+STRIPE_SUCCESS_URL=https://orgflow-saas-platform.vercel.app/checkout/success
+STRIPE_CANCEL_URL=https://orgflow-saas-platform.vercel.app/checkout/cancel
+RESEND_API_KEY=re_...
+EMAIL_FROM=OrgFlow <onboarding@resend.dev>
+```
+
+Build command example:
+
+```text
+npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build
+```
+
+Start: `npm start`
+
+**Vercel (frontend)** — root directory `frontend`:
+
+```text
+NEXT_PUBLIC_API_URL=/api
+NEXT_PUBLIC_APP_URL=https://orgflow-saas-platform.vercel.app
+```
+
+Optional: `API_PROXY_TARGET=https://orgflow-saas-platform.onrender.com`
+
+### Stripe webhook (production)
+
+Endpoint:
+
+```text
+https://orgflow-saas-platform.onrender.com/api/webhooks/stripe
+```
+
+Do **not** use the local `stripe listen` signing secret in production.
+
+### Auth cookie note
+
+Because the app and API are on different hosts, the frontend proxies `/api` through Next.js so session cookies are set on the **Vercel** domain. Next.js middleware can then see `orgflow_access` / `orgflow_refresh` and protect `/platform`, `/organization`, and `/member`.
 
 ---
 
@@ -418,9 +483,11 @@ Production checklist: `COOKIE_SECURE=true`, matching `FRONTEND_URL` / CORS origi
 - Stripe Checkout uses inline `price_data` (no pre-created Stripe Price objects required for the demo)
 - Invoice PDFs use PDFKit; payment methods are managed via Stripe Customer Portal
 - Per-organization custom SMTP is an optional bonus and is **not** implemented
-- End-to-end payment/email delivery needs real Stripe / Resend test keys locally
+- End-to-end payment/email delivery needs real Stripe / Resend test keys
 - Refresh rotation is basic (single stored hash per refresh token)
 - Renewal sync depends on Stripe delivering `invoice.paid` / subscription events to the webhook
+- Render free instances cold-start after idle; first API call can be slow
+- Calling the Render API **directly** from the browser (bypassing the Vercel `/api` proxy) will not set cookies the Next middleware can read
 
 ### Bonus status
 
