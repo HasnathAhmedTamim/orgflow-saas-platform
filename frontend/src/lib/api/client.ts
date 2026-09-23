@@ -1,7 +1,8 @@
 import type { ApiResponse } from '@/lib/types';
 
 export const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || 'http://localhost:5000/api';
+
 
 export class ApiError extends Error {
   constructor(
