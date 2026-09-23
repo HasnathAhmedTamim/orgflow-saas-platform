@@ -10,7 +10,8 @@ function baseCookieOptions(maxAgeMs: number): CookieOptions {
   return {
     httpOnly: true,
     secure: env.COOKIE_SECURE || isProd,
-    sameSite: isProd ? 'none' : 'lax',
+    // First-party via Vercel /api proxy (same site as the app).
+    sameSite: 'lax',
     path: '/',
     maxAge: maxAgeMs,
   };
@@ -26,7 +27,7 @@ export function clearAuthCookies(res: Response) {
   const clearOpts: CookieOptions = {
     httpOnly: true,
     secure: env.COOKIE_SECURE || isProd,
-    sameSite: isProd ? 'none' : 'lax',
+    sameSite: 'lax',
     path: '/',
   };
   res.clearCookie(ACCESS_COOKIE, clearOpts);
