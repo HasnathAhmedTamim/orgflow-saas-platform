@@ -47,7 +47,6 @@ const navConfig: Record<AppShellVariant, NavItem[]> = {
   ],
   member: [
     { href: '/member', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/member/profile', label: 'Profile', icon: User },
     { href: '/member/organization', label: 'Organization', icon: Building2 },
   ],
 };
@@ -58,7 +57,17 @@ const accountHref: Partial<Record<AppShellVariant, string>> = {
   member: '/member/profile',
 };
 
-function pageTitleFromPath(pathname: string, items: NavItem[], shellTitle: string) {
+const accountLabel: Partial<Record<AppShellVariant, string>> = {
+  organization: 'My account',
+  member: 'Profile',
+};
+
+function pageTitleFromPath(
+  pathname: string,
+  items: NavItem[],
+  shellTitle: string,
+  accountTitle = 'Profile',
+) {
   const exact = items.find((item) => item.href === pathname);
   if (exact) return exact.label;
   const nested = [...items]
@@ -66,7 +75,7 @@ function pageTitleFromPath(pathname: string, items: NavItem[], shellTitle: strin
     .sort((a, b) => b.href.length - a.href.length)
     .find((item) => pathname.startsWith(item.href));
   if (nested) return nested.label;
-  if (pathname.includes('/account')) return 'Profile';
+  if (pathname.includes('/account') || pathname.includes('/profile')) return accountTitle;
   return shellTitle;
 }
 
@@ -82,6 +91,7 @@ export function AppShell({ variant, children }: AppShellProps) {
   const { user, logout, isLoggingOut } = useAuth();
   const items = navConfig[variant];
   const profileHref = accountHref[variant];
+  const profileLabel = accountLabel[variant] ?? 'Profile';
 
   const shellTitle =
     variant === 'platform'
@@ -90,7 +100,7 @@ export function AppShell({ variant, children }: AppShellProps) {
         ? 'Organization Admin'
         : 'Member';
 
-  const pageTitle = pageTitleFromPath(pathname, items, shellTitle);
+  const pageTitle = pageTitleFromPath(pathname, items, shellTitle, profileLabel);
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
@@ -169,8 +179,8 @@ export function AppShell({ variant, children }: AppShellProps) {
                 pathname.startsWith(profileHref) && 'bg-[var(--sidebar-active)] text-white',
               )}
             >
-              <Settings className="h-4 w-4" aria-hidden />
-              Profile
+                <Settings className="h-4 w-4" aria-hidden />
+              {profileLabel}
             </Link>
           ) : null}
           <div className="px-2">

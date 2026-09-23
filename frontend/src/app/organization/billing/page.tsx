@@ -112,6 +112,25 @@ export default function OrganizationBillingPage() {
         </div>
       </section>
 
+      {payments.some((p) => p.status === 'PENDING') ? (
+        <div
+          className="rounded-[var(--radius)] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+          role="status"
+        >
+          <p className="font-medium">Checkout in progress</p>
+          <p className="mt-1 text-amber-900/90">
+            One or more payments are still pending. Complete Stripe Checkout or wait for the
+            session to expire — abandoned checkouts are rolled back automatically.
+          </p>
+          <Link
+            href="/organization/subscription"
+            className="mt-2 inline-block font-medium underline"
+          >
+            Review subscription
+          </Link>
+        </div>
+      ) : null}
+
       {actionError ? (
         <div
           role="alert"

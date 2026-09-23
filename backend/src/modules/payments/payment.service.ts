@@ -171,18 +171,40 @@ export class PaymentService {
     const plan = await prisma.plan.findFirst({ where: { id: planId, isActive: true } });
     if (!plan) throw errors.notFound('Plan not found');
 
+    // ACTIVE for mid-period changes; CANCELLED/EXPIRED/FAILED can pick a plan again via Checkout.
     const current = await prisma.subscription.findFirst({
-      where: { organizationId: user.organizationId, status: SubscriptionStatus.ACTIVE },
+      where: {
+        organizationId: user.organizationId,
+        status: {
+          in: [
+            SubscriptionStatus.ACTIVE,
+            SubscriptionStatus.CANCELLED,
+            SubscriptionStatus.EXPIRED,
+            SubscriptionStatus.FAILED,
+          ],
+        },
+      },
       include: { plan: true },
+      orderBy: { createdAt: 'desc' },
     });
-    if (!current) throw errors.notFound('No active subscription');
+    if (!current) throw errors.notFound('No subscription found');
 
-    if (action === 'upgrade' && plan.priceCents <= current.plan.priceCents) {
-      throw errors.validation('Selected plan is not an upgrade');
+    const isActivePeriod = current.status === SubscriptionStatus.ACTIVE;
+
+    if (isActivePeriod) {
+      if (action === 'upgrade' && plan.priceCents <= current.plan.priceCents) {
+        throw errors.validation('Selected plan is not an upgrade');
+      }
+      if (action === 'downgrade' && plan.priceCents >= current.plan.priceCents) {
+        throw errors.validation('Selected plan is not a downgrade');
+      }
     }
-    if (action === 'downgrade' && plan.priceCents >= current.plan.priceCents) {
-      throw errors.validation('Selected plan is not a downgrade');
-    }
+
+    const checkoutAction = isActivePeriod
+      ? action
+      : plan.priceCents >= current.plan.priceCents
+        ? 'upgrade'
+        : 'downgrade';
 
     const org = await prisma.organization.findUniqueOrThrow({
       where: { id: user.organizationId },
@@ -208,7 +230,7 @@ export class PaymentService {
       success_url: `${env.STRIPE_SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${env.FRONTEND_URL}/organization/subscription`,
       metadata: {
-        type: action,
+        type: checkoutAction,
         organizationId: org.id,
         planId: plan.id,
         previousSubscriptionId: current.id,
@@ -224,7 +246,7 @@ export class PaymentService {
           currency: plan.currency,
           status: PaymentStatus.PENDING,
           stripeCheckoutSessionId: session.id,
-          description: `${action} pending — ${plan.name}`,
+          description: `${checkoutAction} pending — ${plan.name}`,
         },
       });
       await tx.transaction.create({
@@ -234,8 +256,8 @@ export class PaymentService {
           amountCents: plan.priceCents,
           currency: plan.currency,
           status: TransactionStatus.PENDING,
-          type: action === 'upgrade' ? 'PLAN_UPGRADE' : 'PLAN_DOWNGRADE',
-          description: `Pending subscription ${action} to ${plan.name}`,
+          type: checkoutAction === 'upgrade' ? 'PLAN_UPGRADE' : 'PLAN_DOWNGRADE',
+          description: `Pending subscription ${checkoutAction} to ${plan.name}`,
           metadata: { sessionId: session.id },
         },
       });

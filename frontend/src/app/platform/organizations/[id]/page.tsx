@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api/admin';
@@ -16,6 +17,7 @@ import { formatDate } from '@/lib/utils';
 import type { OrgStatus } from '@/lib/types';
 import { toast } from '@/components/ui/toast';
 import { ApiError } from '@/lib/api/client';
+import { ArrowLeft } from 'lucide-react';
 
 export default function PlatformOrganizationDetailPage() {
   const params = useParams();
@@ -53,6 +55,16 @@ export default function PlatformOrganizationDetailPage() {
 
   return (
     <div>
+      <div className="mb-4">
+        <Link
+          href="/platform/organizations"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--primary)] hover:underline"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+          Back to organizations
+        </Link>
+      </div>
+
       <PageHeader
         title={org.name}
         description={`Organization ID: ${org.id}`}

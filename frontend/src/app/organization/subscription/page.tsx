@@ -84,12 +84,27 @@ export default function OrganizationSubscriptionPage() {
   const plans = plansQuery.data ?? [];
   const currentPlan = subscription?.plan;
   const busy = upgradeMutation.isPending || downgradeMutation.isPending;
+  const canChangePlan =
+    !!subscription &&
+    ['ACTIVE', 'CANCELLED', 'EXPIRED', 'FAILED'].includes(subscription.status);
+  const needsCheckout =
+    !!subscription &&
+    (subscription.status === 'CANCELLED' ||
+      subscription.status === 'EXPIRED' ||
+      subscription.status === 'FAILED');
 
   function changePlan(planId: string, direction: 'upgrade' | 'downgrade' | 'select') {
+    if (!canChangePlan) {
+      toast.error('No subscription found for this organization.');
+      return;
+    }
     setPendingPlanId(planId);
-    if (direction === 'downgrade') {
+    if (!needsCheckout && direction === 'downgrade') {
       downgradeMutation.mutate(planId);
+    } else if (!needsCheckout && direction === 'upgrade') {
+      upgradeMutation.mutate(planId);
     } else {
+      // Cancelled / expired / failed: any plan goes through Checkout (upgrade endpoint).
       upgradeMutation.mutate(planId);
     }
   }
@@ -250,31 +265,39 @@ export default function OrganizationSubscriptionPage() {
                       )}
                     </ul>
 
-                    {isCurrent ? (
+                    {isCurrent && !needsCheckout ? (
                       <Button variant="secondary" className="w-full" disabled>
                         Current plan
+                      </Button>
+                    ) : isCurrent && needsCheckout ? (
+                      <Button
+                        className="w-full"
+                        disabled={busy}
+                        onClick={() => changePlan(plan.id, 'select')}
+                      >
+                        {planBusy ? 'Processing…' : 'Subscribe'}
                       </Button>
                     ) : isUpgrade ? (
                       <Button
                         className="w-full"
-                        disabled={busy}
+                        disabled={busy || !canChangePlan}
                         onClick={() => changePlan(plan.id, 'upgrade')}
                       >
-                        {planBusy ? 'Processing…' : 'Upgrade'}
+                        {planBusy ? 'Processing…' : needsCheckout ? 'Subscribe' : 'Upgrade'}
                       </Button>
                     ) : isDowngrade ? (
                       <Button
                         variant="outline"
                         className="w-full"
-                        disabled={busy}
+                        disabled={busy || !canChangePlan}
                         onClick={() => changePlan(plan.id, 'downgrade')}
                       >
-                        {planBusy ? 'Processing…' : 'Downgrade'}
+                        {planBusy ? 'Processing…' : needsCheckout ? 'Subscribe' : 'Downgrade'}
                       </Button>
                     ) : (
                       <Button
                         className="w-full"
-                        disabled={busy}
+                        disabled={busy || !canChangePlan}
                         onClick={() => changePlan(plan.id, 'select')}
                       >
                         {planBusy ? 'Processing…' : 'Select plan'}
