@@ -44,10 +44,8 @@ export function useAuth() {
       toast.success(`Welcome back, ${data.user.name}`);
       router.replace(getRoleHomePath(data.user.role));
     },
-    onError: (err) => {
-      const message = err instanceof ApiError ? err.message : 'Login failed';
-      toast.error(message);
-    },
+    // Errors are shown inline on the login form — avoid duplicate toasts.
+    onError: () => {},
   });
 
   const logoutMutation = useMutation({

@@ -21,6 +21,8 @@ import { useAuth } from '@/hooks/use-auth';
 import { setSidebarOpen, toggleSidebar } from '@/store/ui-slice';
 import type { RootState } from '@/store';
 import { cn } from '@/lib/utils';
+import { BrandLogo } from '@/components/brand/BrandLogo';
+import { PageEnter } from '@/components/motion/PageEnter';
 
 export type AppShellVariant = 'platform' | 'organization' | 'member';
 
@@ -121,16 +123,14 @@ export function AppShell({ variant, children }: AppShellProps) {
         aria-label="Main navigation"
       >
         <div className="flex h-16 items-center justify-between border-b border-[var(--sidebar-border)] px-4">
-          <Link href={items[0].href} className="flex min-w-0 items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)] text-sm font-bold text-white">
-              OF
-            </div>
-            <div className="min-w-0">
-              <span className="block truncate text-sm font-semibold text-white">OrgFlow</span>
-              <span className="block truncate text-[11px] text-[var(--sidebar-muted)]">
-                {shellTitle}
-              </span>
-            </div>
+          <Link href={items[0].href} className="flex min-w-0 items-center">
+            <BrandLogo
+              href={null}
+              tone="dark"
+              size="md"
+              subtitle={shellTitle}
+              className="min-w-0"
+            />
           </Link>
           <Button
             variant="ghost"
@@ -231,7 +231,9 @@ export function AppShell({ variant, children }: AppShellProps) {
           </div>
         </header>
 
-        <main className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">{children}</main>
+        <main className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+          <PageEnter key={pathname}>{children}</PageEnter>
+        </main>
       </div>
     </div>
   );

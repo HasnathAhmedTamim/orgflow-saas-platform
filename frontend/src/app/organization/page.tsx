@@ -9,7 +9,6 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { DashboardSkeleton } from '@/components/common/Skeleton';
 import { StatCard } from '@/components/common/StatCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
@@ -20,7 +19,15 @@ import {
   UserPlus,
   Users,
   ArrowRight,
+  Receipt,
 } from 'lucide-react';
+
+const quickLinks = [
+  { href: '/organization/members', label: 'Members', description: 'Invite and manage roles' },
+  { href: '/organization/subscription', label: 'Subscription', description: 'Plan and renewals' },
+  { href: '/organization/billing', label: 'Billing', description: 'Invoices and portal' },
+  { href: '/organization/transactions', label: 'Transactions', description: 'Payment history' },
+] as const;
 
 export default function OrganizationDashboardPage() {
   const { user } = useAuth();
@@ -65,43 +72,35 @@ export default function OrganizationDashboardPage() {
   const firstName = user?.name?.split(' ')[0] ?? 'there';
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      <section
-        aria-labelledby="welcome-heading"
-        className="rounded-[var(--radius)] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-card)] sm:p-6"
-      >
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-sm text-slate-500">
-              {greeting}, {firstName}
-            </p>
-            <h2
-              id="welcome-heading"
-              className="mt-1 truncate text-2xl font-semibold tracking-tight text-slate-900"
-            >
+    <div className="space-y-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-sm text-[var(--muted)]">
+            {greeting}, {firstName}
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2.5">
+            <h1 className="truncate text-2xl font-semibold tracking-tight text-[var(--ink)]">
               {org.name}
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">
-              Overview of your organization subscription, members, and recent billing activity.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
+            </h1>
             <StatusBadge status={org.status} />
-            <Link href="/organization/members">
-              <Button>
-                <UserPlus className="h-4 w-4" />
-                Invite member
-              </Button>
-            </Link>
           </div>
+          <p className="mt-1.5 max-w-xl text-sm text-[var(--muted)]">
+            Subscription, members, and recent billing activity.
+          </p>
         </div>
-      </section>
+        <Link href="/organization/members">
+          <Button size="sm">
+            <UserPlus className="h-4 w-4" />
+            Invite member
+          </Button>
+        </Link>
+      </div>
 
       <section aria-labelledby="kpi-heading">
         <h2 id="kpi-heading" className="sr-only">
           Summary
         </h2>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Current plan"
             value={subscription?.plan.name ?? 'No plan'}
@@ -113,13 +112,9 @@ export default function OrganizationDashboardPage() {
             }
           />
           <StatCard
-            label="Subscription status"
+            label="Subscription"
             value={
-              subscription?.status ? (
-                <StatusBadge status={subscription.status} />
-              ) : (
-                'None'
-              )
+              subscription?.status ? <StatusBadge status={subscription.status} /> : 'None'
             }
             icon={CreditCard}
             hint={
@@ -128,7 +123,7 @@ export default function OrganizationDashboardPage() {
                 : undefined
             }
           />
-          <StatCard label="Members" value={memberCount} icon={Users} hint="Active organization seats" />
+          <StatCard label="Members" value={memberCount} icon={Users} />
           <StatCard
             label="Next billing"
             value={
@@ -137,101 +132,90 @@ export default function OrganizationDashboardPage() {
                 : '—'
             }
             icon={CalendarDays}
-            hint={
-              subscription?.currentPeriodEnd
-                ? 'Current period end date'
-                : 'Available once a subscription is active'
-            }
           />
         </div>
       </section>
 
-      <section aria-labelledby="quick-actions-heading" className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle id="quick-actions-heading">Quick actions</CardTitle>
-            <CardDescription>Common organization tasks</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-2">
-            <Link href="/organization/members" className="block">
-              <Button variant="outline" className="w-full justify-between">
-                Invite / manage members
-                <ArrowRight className="h-4 w-4 opacity-60" />
-              </Button>
-            </Link>
-            <Link href="/organization/subscription" className="block">
-              <Button variant="outline" className="w-full justify-between">
-                Manage subscription
-                <ArrowRight className="h-4 w-4 opacity-60" />
-              </Button>
-            </Link>
-            <Link href="/organization/billing" className="block">
-              <Button variant="outline" className="w-full justify-between">
-                View billing
-                <ArrowRight className="h-4 w-4 opacity-60" />
-              </Button>
-            </Link>
-            <Link href="/organization/transactions" className="block">
-              <Button variant="outline" className="w-full justify-between">
-                View transactions
-                <ArrowRight className="h-4 w-4 opacity-60" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-start justify-between gap-3">
-            <div>
-              <CardTitle>Recent transactions</CardTitle>
-              <CardDescription>Latest subscription and payment events</CardDescription>
-            </div>
+      <section aria-labelledby="links-heading">
+        <h2 id="links-heading" className="mb-3 text-sm font-semibold text-[var(--ink)]">
+          Go to
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {quickLinks.map((item) => (
             <Link
-              href="/organization/transactions"
-              className="shrink-0 text-sm font-medium text-[var(--primary)] hover:underline"
+              key={item.href}
+              href={item.href}
+              className="group flex items-start justify-between gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-white p-4 transition-colors hover:border-[var(--primary)]/40 hover:bg-[color-mix(in_srgb,var(--primary)_4%,white)]"
             >
-              View all
+              <span>
+                <span className="block text-sm font-semibold text-[var(--ink)]">{item.label}</span>
+                <span className="mt-0.5 block text-xs text-[var(--muted)]">{item.description}</span>
+              </span>
+              <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-[var(--muted)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--primary)]" />
             </Link>
-          </CardHeader>
-          <CardContent>
-            {txQuery.isLoading ? (
-              <p className="py-8 text-center text-sm text-slate-500" role="status">
-                Loading transactions…
-              </p>
-            ) : txQuery.isError ? (
+          ))}
+        </div>
+      </section>
+
+      <section
+        aria-labelledby="tx-heading"
+        className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-white"
+      >
+        <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4 sm:px-6">
+          <div className="flex items-center gap-2">
+            <Receipt className="h-4 w-4 text-[var(--muted)]" aria-hidden />
+            <h2 id="tx-heading" className="text-sm font-semibold text-[var(--ink)]">
+              Recent transactions
+            </h2>
+          </div>
+          <Link
+            href="/organization/transactions"
+            className="text-sm font-medium text-[var(--primary)] hover:underline"
+          >
+            View all
+          </Link>
+        </div>
+        <div className="px-5 sm:px-6">
+          {txQuery.isLoading ? (
+            <p className="py-10 text-center text-sm text-[var(--muted)]" role="status">
+              Loading transactions…
+            </p>
+          ) : txQuery.isError ? (
+            <div className="py-8">
               <ErrorState
-                className="py-8"
                 message="We couldn't load recent transactions."
                 onRetry={() => txQuery.refetch()}
               />
-            ) : recentTx.length === 0 ? (
+            </div>
+          ) : recentTx.length === 0 ? (
+            <div className="py-10">
               <EmptyState
                 title="No transactions yet"
                 description="Payments and subscription events will appear here after billing activity."
               />
-            ) : (
-              <ul className="divide-y divide-slate-100">
-                {recentTx.map((tx) => (
-                  <li
-                    key={tx.id}
-                    className="flex flex-col gap-2 py-3.5 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-slate-900">{tx.type}</p>
-                      <p className="text-xs text-slate-500">{formatDateTime(tx.createdAt)}</p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className="text-sm font-semibold text-slate-900">
-                        {formatCurrency(tx.amountCents, tx.currency)}
-                      </span>
-                      <StatusBadge status={tx.status} />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          ) : (
+            <ul className="divide-y divide-[var(--border)]">
+              {recentTx.map((tx) => (
+                <li
+                  key={tx.id}
+                  className="flex flex-col gap-2 py-3.5 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-[var(--ink)]">{tx.type}</p>
+                    <p className="text-xs text-[var(--muted)]">{formatDateTime(tx.createdAt)}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-sm font-semibold tabular-nums text-[var(--ink)]">
+                      {formatCurrency(tx.amountCents, tx.currency)}
+                    </span>
+                    <StatusBadge status={tx.status} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </section>
     </div>
   );

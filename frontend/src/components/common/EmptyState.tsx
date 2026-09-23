@@ -26,7 +26,7 @@ export function EmptyState({
     >
       <Icon className="h-5 w-5 text-[var(--muted)]" aria-hidden />
       <div className="max-w-sm">
-        <h3 className="text-sm font-semibold text-[#14161a]">{title}</h3>
+        <h3 className="text-sm font-semibold text-[var(--ink)]">{title}</h3>
         <p className="mt-1 text-sm leading-relaxed text-[var(--muted)]">{description}</p>
       </div>
       {action ? <div className="mt-1">{action}</div> : null}

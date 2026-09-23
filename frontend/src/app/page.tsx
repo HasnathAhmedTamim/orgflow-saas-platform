@@ -7,6 +7,8 @@ import { useAuth } from '@/hooks/use-auth';
 import { LoadingState } from '@/components/common/LoadingState';
 import { getRoleHomePath } from '@/lib/auth-utils';
 import { Button } from '@/components/ui/button';
+import { BrandLogo } from '@/components/brand/BrandLogo';
+import { FadeUp, PageEnter } from '@/components/motion/PageEnter';
 
 export default function HomePage() {
   const { user, isLoading } = useAuth();
@@ -27,15 +29,10 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      <header className="border-b border-[var(--border)]">
+    <div className="min-h-screen bg-[var(--background)]">
+      <header className="border-b border-[var(--border)] bg-white">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded bg-[var(--primary)] text-xs font-bold tracking-wide text-white">
-              OF
-            </div>
-            <span className="text-base font-semibold text-[#14161a]">OrgFlow</span>
-          </div>
+          <BrandLogo size="sm" />
           <div className="flex items-center gap-2">
             <Link href="/login">
               <Button variant="ghost">Sign in</Button>
@@ -48,54 +45,56 @@ export default function HomePage() {
       </header>
 
       <main>
-        <section className="border-b border-[var(--border)] bg-[var(--background)]">
-          <div className="mx-auto grid max-w-5xl gap-10 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">
+        <section className="border-b border-[var(--border)] bg-white">
+          <PageEnter className="mx-auto max-w-5xl px-4 py-16 sm:px-6 sm:py-24">
+            <FadeUp>
+              <h1 className="max-w-2xl text-4xl font-semibold leading-[1.12] tracking-tight text-[var(--ink)] sm:text-5xl">
                 OrgFlow
-              </p>
-              <h1 className="mt-4 max-w-xl text-4xl font-semibold leading-[1.15] tracking-tight text-[#14161a] sm:text-5xl">
-                Subscription ops for multi-tenant teams
               </h1>
-              <p className="mt-4 max-w-lg text-base leading-relaxed text-[var(--muted)]">
-                One workspace for platform admins, organization admins, and members — plans,
-                members, billing, and Stripe checkout without the clutter.
+            </FadeUp>
+            <FadeUp delay={0.06}>
+              <p className="mt-4 max-w-xl text-lg leading-relaxed text-[var(--muted)] sm:text-xl">
+                Multi-tenant subscriptions — plans, members, and Stripe billing in one workspace.
               </p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <Link href="/register">
-                  <Button size="lg">Create organization</Button>
-                </Link>
-                <Link href="/login">
-                  <Button size="lg" variant="outline">
-                    Sign in
-                  </Button>
-                </Link>
-              </div>
-            </div>
+            </FadeUp>
+            <FadeUp delay={0.12} className="mt-9 flex flex-wrap gap-3">
+              <Link href="/register">
+                <Button size="lg">Create organization</Button>
+              </Link>
+              <Link href="/login">
+                <Button size="lg" variant="outline">
+                  Sign in
+                </Button>
+              </Link>
+            </FadeUp>
 
-            <aside className="rounded-md border border-[var(--border)] bg-white p-5">
-              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
-                Who it&apos;s for
-              </p>
-              <ul className="mt-4 space-y-4 text-sm">
-                <li className="border-b border-[var(--border)] pb-3">
-                  <p className="font-medium text-[#14161a]">Platform admin</p>
-                  <p className="mt-1 text-[var(--muted)]">Tenants, plans, and revenue</p>
-                </li>
-                <li className="border-b border-[var(--border)] pb-3">
-                  <p className="font-medium text-[#14161a]">Organization admin</p>
-                  <p className="mt-1 text-[var(--muted)]">Members, subscription, billing</p>
-                </li>
-                <li>
-                  <p className="font-medium text-[#14161a]">Member</p>
-                  <p className="mt-1 text-[var(--muted)]">Profile and org context only</p>
-                </li>
-              </ul>
-            </aside>
-          </div>
+            <FadeUp
+              delay={0.18}
+              className="mt-16 grid gap-6 border-t border-[var(--border)] pt-10 sm:grid-cols-3"
+            >
+              <div>
+                <p className="text-sm font-semibold text-[var(--ink)]">Platform admin</p>
+                <p className="mt-1.5 text-sm leading-relaxed text-[var(--muted)]">
+                  Tenants, plans, and revenue across the product.
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[var(--ink)]">Organization admin</p>
+                <p className="mt-1.5 text-sm leading-relaxed text-[var(--muted)]">
+                  Members, subscription changes, and invoices.
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[var(--ink)]">Member</p>
+                <p className="mt-1.5 text-sm leading-relaxed text-[var(--muted)]">
+                  Profile and org context — no billing surface.
+                </p>
+              </div>
+            </FadeUp>
+          </PageEnter>
         </section>
 
-        <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
+        <section className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
           <p className="text-sm text-[var(--muted)]">
             Already invited?{' '}
             <Link href="/accept-invite" className="font-medium text-[var(--primary)] hover:underline">

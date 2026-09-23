@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { authApi } from '@/lib/api/auth';
-import { toast } from '@/components/ui/toast';
 import { ApiError } from '@/lib/api/client';
 
 const schema = z.object({
@@ -22,12 +21,6 @@ type FormValues = z.infer<typeof schema>;
 export default function ForgotPasswordPage() {
   const mutation = useMutation({
     mutationFn: (email: string) => authApi.forgotPassword(email),
-    onSuccess: (data) => {
-      toast.success(data.message || 'If an account exists, a reset email has been sent.');
-    },
-    onError: (err) => {
-      toast.error(err instanceof ApiError ? err.message : 'Could not send reset email');
-    },
   });
 
   const {
@@ -35,6 +28,13 @@ export default function ForgotPasswordPage() {
     handleSubmit,
     formState: { errors },
   } = useForm<FormValues>({ resolver: zodResolver(schema) });
+
+  const errorMessage =
+    mutation.error instanceof ApiError
+      ? mutation.error.message
+      : mutation.error
+        ? 'Could not send reset email'
+        : null;
 
   return (
     <Card className="w-full max-w-md">
@@ -63,6 +63,14 @@ export default function ForgotPasswordPage() {
             className="space-y-4"
             noValidate
           >
+            {errorMessage ? (
+              <div
+                role="alert"
+                className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+              >
+                {errorMessage}
+              </div>
+            ) : null}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" autoComplete="email" {...register('email')} />

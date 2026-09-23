@@ -3,15 +3,12 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { organizationsApi } from '@/lib/api/organizations';
-import { PageHeader } from '@/components/common/PageHeader';
 import { ErrorState } from '@/components/common/ErrorState';
 import { DashboardSkeleton } from '@/components/common/Skeleton';
 import { StatCard } from '@/components/common/StatCard';
 import { StatusBadge } from '@/components/common/StatusBadge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/use-auth';
-import { Building2, User, Shield } from 'lucide-react';
+import { Building2, User, Shield, ArrowRight } from 'lucide-react';
 
 export default function MemberDashboardPage() {
   const { user } = useAuth();
@@ -25,15 +22,20 @@ export default function MemberDashboardPage() {
   if (orgQuery.isError) return <ErrorState onRetry={() => orgQuery.refetch()} />;
 
   const org = orgQuery.data!;
+  const firstName = user?.name?.split(' ')[0] ?? 'there';
 
   return (
     <div className="space-y-8">
-      <PageHeader
-        title={`Welcome, ${user?.name?.split(' ')[0] ?? 'there'}`}
-        description="Your member workspace — billing and subscriptions are managed by your organization admin."
-      />
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-[var(--ink)]">
+          Welcome, {firstName}
+        </h1>
+        <p className="mt-1.5 max-w-xl text-sm text-[var(--muted)]">
+          Your member workspace. Billing and subscriptions are managed by your organization admin.
+        </p>
+      </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard label="Organization" value={org.name} icon={Building2} />
         <StatCard
           label="Your role"
@@ -47,25 +49,28 @@ export default function MemberDashboardPage() {
         />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Subscription</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <p className="text-slate-600">
-            Subscription and billing are managed by your organization admin. You can view
-            organization details and update your personal profile.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Link href="/member/organization">
-              <Button variant="outline">View organization</Button>
-            </Link>
-            <Link href="/member/profile">
-              <Button variant="outline">Edit profile</Button>
-            </Link>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Link
+          href="/member/organization"
+          className="group flex items-center justify-between rounded-[var(--radius)] border border-[var(--border)] bg-white p-5 transition-colors hover:border-[var(--primary)]/40"
+        >
+          <div>
+            <p className="text-sm font-semibold text-[var(--ink)]">Organization</p>
+            <p className="mt-0.5 text-xs text-[var(--muted)]">Name and plan (read-only)</p>
           </div>
-        </CardContent>
-      </Card>
+          <ArrowRight className="h-4 w-4 text-[var(--muted)] group-hover:text-[var(--primary)]" />
+        </Link>
+        <Link
+          href="/member/profile"
+          className="group flex items-center justify-between rounded-[var(--radius)] border border-[var(--border)] bg-white p-5 transition-colors hover:border-[var(--primary)]/40"
+        >
+          <div>
+            <p className="text-sm font-semibold text-[var(--ink)]">Your profile</p>
+            <p className="mt-0.5 text-xs text-[var(--muted)]">Account details and password</p>
+          </div>
+          <ArrowRight className="h-4 w-4 text-[var(--muted)] group-hover:text-[var(--primary)]" />
+        </Link>
+      </div>
     </div>
   );
 }

@@ -43,9 +43,7 @@ export default function RegisterPage() {
         window.location.href = data.checkoutUrl;
       }
     },
-    onError: (err) => {
-      toast.error(err instanceof ApiError ? err.message : 'Registration failed');
-    },
+    // API errors render in the form banner — no toast duplicate.
   });
 
   const {
@@ -144,7 +142,7 @@ export default function RegisterPage() {
                     className={cn(
                       'rounded-md border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]',
                       selected
-                        ? 'border-[var(--primary)] bg-[#e8f2f0]'
+                        ? 'border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_8%,white)]'
                         : 'border-[var(--border)] bg-white hover:border-[#b8bec8]',
                     )}
                     aria-pressed={selected}

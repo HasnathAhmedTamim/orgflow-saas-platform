@@ -12,7 +12,6 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { authApi } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
-import { toast } from '@/components/ui/toast';
 import { SearchParamsBoundary } from '@/components/common/SearchParamsBoundary';
 
 const schema = z
@@ -33,12 +32,6 @@ function ResetPasswordPageContent() {
 
   const mutation = useMutation({
     mutationFn: (password: string) => authApi.resetPassword(token, password),
-    onSuccess: () => {
-      toast.success('Password reset successfully. You can sign in now.');
-    },
-    onError: (err) => {
-      toast.error(err instanceof ApiError ? err.message : 'Reset failed');
-    },
   });
 
   const {

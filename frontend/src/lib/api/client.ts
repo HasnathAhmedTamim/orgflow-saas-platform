@@ -15,6 +15,19 @@ export class ApiError extends Error {
   }
 }
 
+/** Prefer first Zod field error over generic "Validation failed". */
+export function formatApiErrorMessage(body: Pick<ApiResponse, 'message' | 'details'>): string {
+  const details = body.details;
+  if (details && typeof details === 'object' && !Array.isArray(details)) {
+    const fieldErrors = details as Record<string, string[] | string | undefined>;
+    for (const value of Object.values(fieldErrors)) {
+      if (Array.isArray(value) && value[0]) return String(value[0]);
+      if (typeof value === 'string' && value) return value;
+    }
+  }
+  return body.message || 'Request failed';
+}
+
 let refreshPromise: Promise<void> | null = null;
 
 async function refreshSession() {
@@ -29,7 +42,7 @@ async function refreshSession() {
         }
         const body = (await res.json()) as ApiResponse;
         if (!body.success) {
-          throw new ApiError(body.message, 401, body.code);
+          throw new ApiError(formatApiErrorMessage(body), 401, body.code, body.details);
         }
       })
       .finally(() => {
@@ -74,7 +87,7 @@ export async function apiClient<T>(
 
   if (!response.ok || !body.success) {
     throw new ApiError(
-      body.message || 'Request failed',
+      formatApiErrorMessage(body),
       response.status,
       body.code,
       body.details,

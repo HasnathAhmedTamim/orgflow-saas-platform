@@ -1,25 +1,28 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f4f6f9;
-  --foreground: #0f172a;
+  --ink: #0b1220;
+  --background: #f3f5f8;
+  --foreground: #0b1220;
   --card: #ffffff;
-  --muted: #64748b;
-  --border: #e2e8f0;
-  --primary: #1d4ed8;
+  --muted: #5b6575;
+  --border: #e4e8ef;
+  /* Teal ink — distinct from generic AI blue/purple */
+  --primary: #0f766e;
   --primary-foreground: #ffffff;
-  --accent: #2563eb;
+  --brand: #2dd4bf;
+  --accent: #0d9488;
   --destructive: #dc2626;
-  --ring: #1d4ed8;
-  --sidebar: #0b1f3a;
-  --sidebar-foreground: #e2e8f0;
-  --sidebar-muted: #94a3b8;
-  --sidebar-border: #163256;
-  --sidebar-hover: #132a4a;
-  --sidebar-active: #1a3a66;
+  --ring: #0f766e;
+  --sidebar: #0b1220;
+  --sidebar-foreground: #e8edf5;
+  --sidebar-muted: #8b95a8;
+  --sidebar-border: #1a2333;
+  --sidebar-hover: #141c2b;
+  --sidebar-active: #1a273a;
   --sidebar-active-text: #ffffff;
   --radius: 0.625rem;
-  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06);
+  --shadow-card: 0 1px 2px rgb(11 18 32 / 0.04), 0 1px 3px rgb(11 18 32 / 0.05);
 }
 
 @theme inline {
@@ -40,7 +43,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -54,13 +57,13 @@ body {
 }
 
 ::selection {
-  background: #dbeafe;
-  color: #0f172a;
+  background: #ccfbf1;
+  color: #0b1220;
 }
 
 .auth-shell {
   min-height: 100vh;
-  background-color: #f4f6f9;
+  background-color: var(--background);
 }
 
 .surface-card {

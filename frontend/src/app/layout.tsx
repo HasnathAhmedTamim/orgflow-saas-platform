@@ -1,15 +1,15 @@
 import type { Metadata } from 'next';
-import { IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google';
+import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
 import { Providers } from '@/components/providers';
 import './globals.css';
 
-const plexSans = IBM_Plex_Sans({
+const jakarta = Plus_Jakarta_Sans({
   variable: '--font-sans',
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
 });
 
-const plexMono = IBM_Plex_Mono({
+const jetbrains = JetBrains_Mono({
   variable: '--font-mono',
   subsets: ['latin'],
   weight: ['400', '500'],
@@ -27,7 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${plexSans.variable} ${plexMono.variable} font-sans antialiased`}>
+      <body className={`${jakarta.variable} ${jetbrains.variable} font-sans antialiased`}>
         <Providers>{children}</Providers>
       </body>
     </html>
