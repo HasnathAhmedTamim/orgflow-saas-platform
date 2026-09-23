@@ -26,6 +26,13 @@ Organizations onboard through **paid Stripe Checkout**. Tenants activate only af
 Seeded logins (same as local): see [Test credentials](#test-credentials).  
 **Note:** Render free tier sleeps when idle — the first request after idle can take ~30–60s.
 
+### Walkthrough videos
+
+| Video | Link |
+|-------|------|
+| 1 — Product walkthrough | https://drive.google.com/file/d/1LFGEUU-wr5GQ_x4jR3OnewIkqCs7Bgv8/view?usp=sharing |
+| 2 — Code walkthrough | https://drive.google.com/file/d/1e5-Ox1Rcw-0sjbGpC7PC5Kh6r3Dn26Pt/view?usp=sharing |
+
 ---
 
 ## Table of contents
