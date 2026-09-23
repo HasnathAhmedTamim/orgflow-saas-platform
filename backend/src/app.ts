@@ -41,6 +41,15 @@ export function createApp(): Application {
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));
 
+  app.get('/', (_req, res) => {
+    res.json({
+      success: true,
+      message: 'OrgFlow API',
+      health: '/api/health',
+      docs: 'Use /api/* routes. Frontend is served separately.',
+    });
+  });
+
   app.get('/api/health', (_req, res) => {
     res.json({ success: true, message: 'OrgFlow API healthy' });
   });
