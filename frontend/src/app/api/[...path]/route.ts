@@ -17,7 +17,9 @@ async function proxy(req: NextRequest, ctx: RouteCtx) {
   if (contentType) headers.set('content-type', contentType);
   if (cookie) headers.set('cookie', cookie);
   if (accept) headers.set('accept', accept);
-  // So Express CORS / logs see the real browser origin when needed
+  // Avoid gzip/br mismatch when forwarding the body through Next.
+  headers.set('accept-encoding', 'identity');
+
   const origin = req.headers.get('origin');
   if (origin) headers.set('origin', origin);
 
@@ -31,24 +33,26 @@ async function proxy(req: NextRequest, ctx: RouteCtx) {
     init.body = await req.arrayBuffer();
   }
 
-  const upstream = await fetch(target, init);
+  let upstream: Response;
+  try {
+    upstream = await fetch(target, init);
+  } catch {
+    return NextResponse.json(
+      {
+        success: false,
+        message: 'API temporarily unavailable. Please retry in a moment.',
+        code: 'UPSTREAM_UNAVAILABLE',
+      },
+      { status: 502 },
+    );
+  }
+
+  // Read as buffer so fetch decompresses; do not stream raw compressed bytes.
+  const body = await upstream.arrayBuffer();
   const out = new Headers();
+  const upstreamContentType = upstream.headers.get('content-type');
+  if (upstreamContentType) out.set('content-type', upstreamContentType);
 
-  upstream.headers.forEach((value, key) => {
-    const lower = key.toLowerCase();
-    if (
-      lower === 'transfer-encoding' ||
-      lower === 'connection' ||
-      lower === 'keep-alive' ||
-      lower === 'content-encoding'
-    ) {
-      return;
-    }
-    if (lower === 'set-cookie') return;
-    out.set(key, value);
-  });
-
-  // Preserve multiple Set-Cookie headers (auth access + refresh)
   const getSetCookie = upstream.headers.getSetCookie?.bind(upstream.headers);
   if (getSetCookie) {
     for (const cookieHeader of getSetCookie()) {
@@ -59,7 +63,7 @@ async function proxy(req: NextRequest, ctx: RouteCtx) {
     if (single) out.append('set-cookie', single);
   }
 
-  return new NextResponse(upstream.body, {
+  return new NextResponse(body, {
     status: upstream.status,
     headers: out,
   });
