@@ -1,155 +1,256 @@
-# OrgFlow — Multi-Tenant SaaS Subscription Platform
+# OrgFlow
 
-OrgFlow is a multi-tenant SaaS subscription platform built for the **Octopi Digital Jr. Full-Stack Developer** technical assessment.
+Multi-tenant SaaS subscription platform for the **Octopi Digital Jr. Full-Stack Developer** assessment.
 
-Organizations register through **paid onboarding** (Stripe Checkout). Activation happens only after a verified Stripe webhook. Each organization operates in an isolated tenant space with its own users, subscription, payments, and transactions.
+Organizations onboard through **paid Stripe Checkout**. Tenants activate only after a **verified webhook**. Each organization is isolated with its own users, subscription, payments, and transactions.
+
+| Layer | Stack |
+|-------|--------|
+| Frontend | Next.js 15 (App Router), TypeScript, Tailwind, TanStack Query |
+| Backend | Express, TypeScript, Prisma |
+| Database | PostgreSQL |
+| Auth | JWT access + refresh in HTTP-only cookies |
+| Payments | Stripe Checkout + webhooks |
+| Email | Resend (`EmailService` abstraction) |
+
+**Default local ports:** frontend `3000` · API `5000`
+
+---
+
+## Table of contents
+
+1. [Features](#features)
+2. [Architecture](#architecture)
+3. [Tech choices](#tech-choices)
+4. [Database design](#database-design)
+5. [Multi-tenancy](#multi-tenancy)
+6. [Authentication](#authentication)
+7. [Payment flow](#payment-flow)
+8. [Webhook idempotency](#webhook-idempotency)
+9. [Transactions & rollback](#transactions--rollback)
+10. [Security](#security)
+11. [Repository structure](#repository-structure)
+12. [Local setup](#local-setup)
+13. [Environment variables](#environment-variables)
+14. [Testing](#testing)
+15. [Test credentials](#test-credentials)
+16. [Postman](#postman)
+17. [CI/CD & deployment](#cicd--deployment)
+18. [Known limitations](#known-limitations)
+19. [AI usage](#ai-usage)
+
+---
 
 ## Features
 
 ### Platform Admin
-- Dashboard stats (orgs, users, revenue, failed payments, recent signups)
-- Organizations list with search/filter, detail pages
+- Dashboard metrics (organizations, users, subscriptions, revenue, failed payments, recent signups)
+- Organization search / status filter, detail view (members, subscription history, payments, transactions)
 - Suspend / reactivate organizations
-- Plans management (create / edit / disable)
-- Platform-wide transaction history
+- Plans: create, edit, disable
+- Platform-wide transaction history with filters
 
 ### Organization Admin
-- Org profile (name, contact, billing email)
-- Member invite / remove / role change
-- Subscription view, upgrade / downgrade / cancel
-- Billing & payment history, org transactions
+- Organization profile (name, contact, billing email)
+- Members: invite, remove, change role
+- Subscription: view, upgrade, downgrade, cancel
+- Billing: payment history, Stripe Customer Portal, PDF invoice download
+- Organization-scoped transactions
 
 ### Organization Member
-- Own profile + password change
-- Read-only org info (name + plan — no billing)
+- Own profile and password change
+- Read-only organization view (name + plan)
+- No access to members, billing, subscription management, or transactions
+
+---
 
 ## Architecture
 
 ```text
-Next.js (Vercel)  --HTTPS + HTTP-only cookies-->  Express API (Render)
-                                                      |
-                                         +------------+------------+
-                                         |            |            |
-                                   Neon Postgres   Stripe      Resend
-                                      (Prisma)
+┌─────────────────┐  HTTPS + HTTP-only cookies  ┌──────────────────┐
+│  Next.js (FE)   │ ───────────────────────────► │  Express API     │
+│  :3000 / Vercel │                              │  :5000 / Render  │
+└─────────────────┘                              └────────┬─────────┘
+                                                          │
+                                    ┌─────────────────────┼─────────────────────┐
+                                    ▼                     ▼                     ▼
+                              PostgreSQL               Stripe                Resend
+                              (Prisma/Neon)         Checkout+WH             Email
 ```
 
-**Backend layers:** `Route → Middleware → Controller → Service → Prisma`
+| Concern | Approach |
+|---------|----------|
+| Backend layering | `Route → Middleware → Controller → Service → Prisma` |
+| Frontend routing | Role areas: `/platform`, `/organization`, `/member` |
+| Server state | TanStack Query |
+| UI chrome only | Redux Toolkit (sidebar open/close) |
+| Source of truth for activation | Stripe webhook (not the success redirect URL) |
 
-**Frontend:** App Router role areas (`/platform`, `/organization`, `/member`) + TanStack Query for server state. Redux Toolkit is used only for UI chrome (sidebar).
+---
 
-## Tech Stack
+## Tech choices
 
-| Area | Choice | Why |
-|------|--------|-----|
-| Frontend | Next.js App Router + TS + Tailwind | Fast UI, clear route groups per role |
-| Data fetching | TanStack Query | Server state without Redux duplication |
-| Backend | Express + TypeScript | Simple, interview-explainable REST API |
-| ORM / DB | Prisma + PostgreSQL | Typed schema, `$transaction`, indexes, FKs |
-| Auth | JWT access + refresh in HTTP-only cookies | Avoid localStorage token theft |
-| Payments | Stripe Checkout + webhooks | Webhook is source of truth |
-| Email | Resend behind `EmailService` | Swappable provider |
+| Area | Choice | Rationale |
+|------|--------|-----------|
+| Frontend | Next.js App Router + TypeScript + Tailwind | Clear role-based route groups, fast UI iteration |
+| Data fetching | TanStack Query | Server state without duplicating it in Redux |
+| Backend | Express + TypeScript | Small, interview-explainable REST API |
+| ORM / DB | Prisma + PostgreSQL | Typed schema, `$transaction`, FKs, indexes |
+| Auth | JWT access + refresh in HTTP-only cookies | Avoid token theft via `localStorage` |
+| Payments | Stripe Checkout + webhooks | PCI-friendly; webhook as activation authority |
+| Email | Resend behind `EmailService` | Provider-swappable; console fallback without API key |
 
-## Database Design
+---
 
-Core models: `Organization`, `User`, `Plan`, `Subscription`, `Payment`, `Transaction`, `WebhookEvent`, `Invitation`, `PasswordResetToken`, `RefreshToken`, `PendingRegistration`.
+## Database design
 
-Key relationships: Organization 1→N Users / Subscriptions / Payments / Transactions / Invitations. Subscription → Plan.
+**Core models:** `Organization`, `User`, `Plan`, `Subscription`, `Payment`, `Transaction`, `WebhookEvent`, `Invitation`, `PasswordResetToken`, `RefreshToken`, `PendingRegistration`.
 
-Enums cover org status, subscription status, payment status, and transaction status (`PENDING`, `SUCCESS`, `FAILED`, `REFUNDED`, `ROLLED_BACK`).
+**Relationships**
+- `Organization` 1→N `User`, `Subscription`, `Payment`, `Transaction`, `Invitation`
+- `Subscription` → `Plan`
+- `Transaction` → optional `Payment`
 
-Indexes on `organizationId`, emails, statuses, `createdAt`, and unique `stripeEventId`.
+**Tenant ownership:** `organizationId` on users (nullable for platform admin) and on all tenant-owned ledger/membership rows.
 
-## Multi-Tenancy
+**Status enums (selected)**
+- Organization: `PENDING`, `ACTIVE`, `TRIAL`, `SUSPENDED`, `CANCELLED`
+- Subscription: `ACTIVE`, `PENDING`, `FAILED`, `CANCELLED`, `EXPIRED`
+- Payment: `PENDING`, `SUCCEEDED`, `FAILED`, `REFUNDED`
+- Transaction: `PENDING`, `SUCCESS`, `FAILED`, `REFUNDED`, `ROLLED_BACK`
 
-**Approach:** shared database + shared schema + `organizationId` on tenant data.
+**Indexes:** `organizationId`, emails, statuses, `createdAt`, unique `stripeEventId`, unique checkout/payment intent ids where applicable.
 
-**Enforcement:**
-1. Authenticate user from HTTP-only access cookie JWT
-2. Derive tenant from `user.organizationId` — never trust a client-supplied org id
-3. Services scope queries with that id
+Paid signup uses `PendingRegistration` so **no ACTIVE organization** exists before successful payment.
+
+---
+
+## Multi-tenancy
+
+**Model:** shared database, shared schema, row-level isolation via `organizationId`.
+
+**Enforcement**
+1. Authenticate from the HTTP-only access JWT cookie
+2. Load the user and derive tenant from `user.organizationId` — never trust a client-supplied org id
+3. Scope service queries to that id (`assertTenantAccess`)
 4. Cross-tenant access → `403 TENANT_ACCESS_DENIED`
-5. Platform Admin is the deliberate platform-wide exception
+5. `PLATFORM_ADMIN` is the intentional platform-wide exception
 
-Frontend route hiding is UX only. Backend authorization is the security boundary.
+Frontend route/nav hiding is UX only. **Backend RBAC + tenant checks are the security boundary.**
 
-**Suspension:** when an org is `SUSPENDED`, its users cannot log in or refresh (`ACCOUNT_SUSPENDED`). Platform Admin can still manage them.
+**Suspension:** when an organization is `SUSPENDED`, its users cannot log in or refresh (`ACCOUNT_SUSPENDED`). Platform admins can still manage the org.
+
+---
 
 ## Authentication
 
-- Access JWT (~15m) + refresh JWT (~7d) in HTTP-only cookies (`orgflow_access`, `orgflow_refresh`)
-- Passwords hashed with bcrypt (12 rounds)
-- Refresh tokens stored hashed server-side and revoked on logout / password change
-- Forgot / reset password uses hashed one-time tokens with expiry; responses avoid email enumeration
-- Rate limiting on login, registration, and password endpoints
+| Topic | Implementation |
+|-------|----------------|
+| Tokens | Access JWT (~15m) + refresh JWT (~7d) |
+| Storage | HTTP-only cookies: `orgflow_access`, `orgflow_refresh` |
+| Passwords | bcrypt (12 rounds) |
+| Refresh store | Hashed server-side; revoked on logout / password change |
+| Password reset | Hashed one-time tokens with expiry; responses avoid email enumeration |
+| Rate limits | Login, registration, password, and invite endpoints |
+| Roles | `PLATFORM_ADMIN`, `ORG_ADMIN`, `MEMBER` (enforced with `requireRoles`) |
 
-## Payment Flow
+---
+
+## Payment flow
 
 ```text
 Register (org + admin + plan)
-  → PendingRegistration stored (no ACTIVE org)
-  → Stripe Checkout Session
-  → User pays on Stripe
-  → Webhook checkout.session.completed
+  → store PendingRegistration (no ACTIVE org)
+  → create Stripe Checkout Session
+  → customer pays on Stripe
+  → webhook: checkout.session.completed
        1. Verify Stripe signature (raw body)
-       2. Run Prisma $transaction: Organization ACTIVE + ORG_ADMIN + Subscription + Payment + Transaction
+       2. Prisma $transaction:
+            Organization ACTIVE + ORG_ADMIN user
+            + Subscription + Payment + Transaction
        3. Delete PendingRegistration
        4. Record WebhookEvent (unique stripeEventId) — only after success
-  → Success email
+  → send success email
 ```
 
-Renewals and lifecycle updates:
+**Important:** the Stripe success URL is UX only. **Only the webhook activates the organization.** Abandoned checkouts leave a pending registration that can retry.
 
-```text
-invoice.paid (subscription_cycle) → Payment + Transaction (RENEWAL) + period sync
-invoice.payment_failed            → Payment/Transaction FAILED + Subscription FAILED
-customer.subscription.updated     → status / period / cancel_at_period_end sync
-customer.subscription.deleted     → Subscription EXPIRED
-charge.refunded                   → Payment + Transaction REFUNDED
-checkout expired / failed         → PENDING plan-change rows → ROLLED_BACK / FAILED
-```
+### Ongoing lifecycle (webhooks)
 
-The Stripe success URL is UX only. **Only the webhook activates the organization.** Abandoned payments leave a pending registration that can retry checkout.
+| Event | Effect |
+|-------|--------|
+| `invoice.paid` (`subscription_cycle`) | Renewal payment + transaction; sync period |
+| `invoice.payment_failed` | Failed payment/transaction; subscription `FAILED` |
+| `customer.subscription.updated` | Status / period / `cancel_at_period_end` sync |
+| `customer.subscription.deleted` | Subscription `EXPIRED` |
+| `charge.refunded` | Payment + related transactions → `REFUNDED` |
+| Checkout expired / failed | Pending plan-change rows → `ROLLED_BACK` / `FAILED` |
 
-## Webhook Idempotency
+Plan changes (upgrade/downgrade) also go through Checkout; pending ledger rows are created up front so abandoned sessions can be rolled back cleanly.
 
-`WebhookEvent.stripeEventId` is unique. Business effects run **before** the event row is inserted. If activation fails, no event row is stored, so Stripe retries can re-apply safely. Duplicate deliveries (same event id already recorded) return success without re-applying business effects. Concurrent workers rely on the unique constraint plus business idempotency (consumed `PendingRegistration`, unique checkout session / payment intent).
+---
 
-## Rollback
+## Webhook idempotency
 
-Payment activation runs inside `prisma.$transaction`. If any step fails (e.g. unique email conflict), the entire unit rolls back — no partial org/user/payment rows. Covered by automated tests. Abandoned plan-change checkouts mark pending ledger rows as `ROLLED_BACK`.
+1. If `WebhookEvent.stripeEventId` already exists → treat as duplicate (safe no-op)
+2. Run business effects
+3. Insert `WebhookEvent` **only after success**
+
+If activation fails, no event row is stored, so Stripe retries can re-apply. Concurrent workers rely on the unique constraint plus business idempotency (consumed pending registration, unique session / payment intent).
+
+---
+
+## Transactions & rollback
+
+Payment activation (org + admin + subscription + payment + transaction) runs inside `prisma.$transaction`.
+
+- Any mid-flow failure rolls the whole unit back — no partial org/user/payment rows
+- Covered by automated tests (including unique-email collision rollback)
+- Abandoned plan-change checkouts mark pending ledger rows as `ROLLED_BACK`
+
+---
 
 ## Security
 
-- Password hashing (bcrypt)
-- HTTP-only cookies; Secure + SameSite in production
+- bcrypt password hashing
+- HTTP-only cookies; `Secure` + appropriate `SameSite` in production
 - Zod validation on inputs
-- RBAC middleware (`PLATFORM_ADMIN` / `ORG_ADMIN` / `MEMBER`)
-- Tenant isolation at query level
+- Server-side RBAC (`PLATFORM_ADMIN` / `ORG_ADMIN` / `MEMBER`)
+- Tenant isolation at the query layer
 - Rate limiting on sensitive routes
-- Stripe webhook signature verification
-- Secrets only in environment variables
-- API errors never leak stack traces or DB internals (unknown errors always return a generic 500 message)
+- Stripe webhook signature verification (raw body)
+- Secrets only in environment variables (never committed)
+- Unknown API errors return a generic 500 message (no stack / DB leak to clients)
+
+---
 
 ## Email
 
-`EmailService` → `ResendProvider`. Without `RESEND_API_KEY`, emails log to the console (dev-friendly). Templates cover invites, payment success/failure, subscription changes, and expiring-soon reminders.
+`EmailService` → `ResendProvider`. Without `RESEND_API_KEY`, messages log to the console.
 
-## Repository Structure
+Covers: member invites, payment success/failure, subscription upgrade/downgrade/cancel, and expiring-soon reminders (daily job).
+
+Optional local redirect: `EMAIL_DEV_OVERRIDE_TO` (Resend-verified inbox).
+
+---
+
+## Repository structure
 
 ```text
-frontend/     Next.js app
-backend/      Express API + Prisma
-postman/      API collection
-.github/      CI workflow
-docker-compose.yml   optional local Postgres
+frontend/              Next.js app
+backend/               Express API + Prisma
+postman/               API collection (serial use cases)
+.github/workflows/     CI
+docker-compose.yml     Optional local Postgres
 ```
 
-## Local Setup
+---
+
+## Local setup
 
 ### Prerequisites
 - Node.js 20+
-- PostgreSQL 14+ (or Docker Compose)
+- PostgreSQL 14+ **or** Docker Compose
 - Stripe test keys (for real checkout)
 - Optional: Resend API key
 
@@ -157,60 +258,78 @@ docker-compose.yml   optional local Postgres
 
 ```bash
 # 1) Database
-# Option A: Docker
 docker compose up -d
-
-# Option B: local Postgres — create DB `orgflow`
+# or create local databases: orgflow and orgflow_test
 
 # 2) Backend
 cd backend
 cp .env.example .env
-# edit DATABASE_URL, JWT secrets, Stripe keys
+# set DATABASE_URL, JWT secrets, Stripe keys
 npm install
 npx prisma migrate deploy
 npm run prisma:seed
 npm run dev
-# API: http://localhost:5000
+# → http://localhost:5000
 
 # 3) Frontend (new terminal)
 cd frontend
 cp .env.example .env.local
 npm install
 npm run dev
-# App: http://localhost:3000
+# → http://localhost:3000
 ```
 
-### Stripe webhooks locally
+### Stripe webhooks (local)
 
 ```bash
 stripe listen --forward-to localhost:5000/api/webhooks/stripe
 ```
 
-Put the printed webhook signing secret into `STRIPE_WEBHOOK_SECRET`.
+Copy the printed signing secret into `STRIPE_WEBHOOK_SECRET`, then restart the API.
 
-## Environment Variables
+---
+
+## Environment variables
 
 See `backend/.env.example` and `frontend/.env.example`.
 
-Critical backend vars: `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `FRONTEND_URL`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`.
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | PostgreSQL connection |
+| `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | Token signing |
+| `FRONTEND_URL` / `BACKEND_URL` / `PORT` | CORS, links, listen port |
+| `COOKIE_SECURE` | `true` in production HTTPS |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Payments + webhook verify |
+| `STRIPE_SUCCESS_URL` / `STRIPE_CANCEL_URL` | Checkout redirects |
+| `RESEND_API_KEY` / `EMAIL_FROM` | Outbound email |
+| `EMAIL_DEV_OVERRIDE_TO` | Optional local email redirect |
+| `NEXT_PUBLIC_API_URL` | Frontend → API base (`…/api`) |
+| `NEXT_PUBLIC_APP_URL` | Frontend app origin |
+
+---
 
 ## Testing
 
+### Backend
+
 ```bash
 cd backend
-# ensure orgflow_test database exists and migrated
-set DATABASE_URL=postgresql://postgres:postgres@localhost:5432/orgflow_test?schema=public
+# Windows PowerShell example:
+$env:DATABASE_URL="postgresql://postgres:postgres@localhost:5432/orgflow_test?schema=public"
 npx prisma migrate deploy
 npm test
 ```
 
-Critical coverage:
-- Authentication (login, invalid, protected routes)
-- RBAC (member blocked from billing/members)
-- Tenant isolation (org A cannot see org B / admin routes)
+Covered scenarios include:
+- Authentication (valid/invalid login, protected routes)
+- RBAC (member blocked from billing / members / admin)
+- Tenant isolation (org A cannot see org B / platform routes)
 - Suspension blocks login
-- Webhook activation + duplicate webhook idempotency
-- Transaction rollback on mid-flow failure
+- Webhook activation, duplicate event handling, signed HTTP webhook
+- Activation rollback on mid-flow failure
+- Renewal / refund status updates (service-level)
+
+### Frontend
 
 ```bash
 cd frontend
@@ -218,9 +337,15 @@ npm test
 npm run build
 ```
 
-## Test Credentials
+### CI
 
-Password for all seeded users: `Password123!`
+GitHub Actions (`.github/workflows/ci.yml`) runs backend typecheck + tests (Postgres service) and frontend lint / test / build on every push and pull request.
+
+---
+
+## Test credentials
+
+Password for all seeded users: **`Password123!`**
 
 | Role | Name | Email |
 |------|------|-------|
@@ -228,9 +353,9 @@ Password for all seeded users: `Password123!`
 | Organization Admin | Sarah Ahmed | `admin@acme.com` |
 | Organization Member | James Khan | `member@acme.com` |
 
-Tenant-isolation demo org: Nordic Soft Ltd — `admin@nordicsoft.com` (same password).
+Tenant-isolation demo org: **Nordic Soft Ltd** — `admin@nordicsoft.com` (same password).
 
-### Paid registration demo (UI / Postman)
+### Paid registration demo
 
 | Field | Value |
 |-------|--------|
@@ -240,62 +365,86 @@ Tenant-isolation demo org: Nordic Soft Ltd — `admin@nordicsoft.com` (same pass
 | Password | `Password123!` |
 | Stripe test card | `4242 4242 4242 4242` |
 
+Use a fresh email if that address is already registered from a previous run.
+
+---
+
 ## Postman
 
 Import [`postman/OrgFlow.postman_collection.json`](postman/OrgFlow.postman_collection.json).
 
-**Run folders in order (01 → 12):**
+Run folders **01 → 12** in order:
 
-| # | Folder | What it covers |
-|---|--------|----------------|
+| # | Folder | Covers |
+|---|--------|--------|
 | 01 | Health Check | API up |
 | 02 | Public Plans | Plans before login |
 | 03 | Auth — Platform Admin | Login, me, refresh, invalid login |
-| 04 | Platform Admin Panel | Stats, orgs, plans CRUD, transactions, suspend/reactivate |
+| 04 | Platform Admin Panel | Stats, orgs, plans, transactions, suspend/reactivate |
 | 05 | Auth — Org Admin | Login as Acme admin |
-| 06 | Organization Admin Panel | Profile, members, invite, subscription, billing, invoice, transactions |
-| 07 | Accept Invitation | Join with invite token |
+| 06 | Organization Admin Panel | Profile, members, subscription, billing, invoice, transactions |
+| 07 | Accept Invitation | Join with invite token from email/console |
 | 08 | Auth — Member | Login as member |
 | 09 | Member + Forbidden | Profile OK; billing/members/admin blocked |
-| 10 | Paid Registration | Stripe Checkout → webhook → new org login |
+| 10 | Paid Registration | Checkout → webhook → new org login |
 | 11 | Tenant Isolation | Nordic Soft cannot see Acme / platform data |
-| 12 | Password Reset | Forgot + reset flow |
+| 12 | Password Reset | Forgot + reset |
 
+**Tips**
 1. `baseUrl` = `http://localhost:5000/api`
-2. Enable **Cookies** in Postman
-3. Collection Runner: run `01–06`, `08–09`, `11` automatically
+2. Enable cookies in Postman (JWT session)
+3. Collection Runner: `01–06`, `08–09`, `11` can run largely automatically
 4. Folder `10` needs browser payment + `stripe listen`
-5. Folders `07` / `12` need token from email/console
+5. Folders `07` / `12` need tokens from email or console logs
 
+---
 
-## Deployment
+## CI/CD & deployment
 
-| Service | Target |
-|---------|--------|
+| Service | Suggested target |
+|---------|------------------|
 | Frontend | Vercel |
 | Backend | Render |
 | Database | Neon PostgreSQL |
 | Payments | Stripe (test → live) |
 | Email | Resend |
 
-Set production `COOKIE_SECURE=true`, matching `FRONTEND_URL` / CORS origin, and Stripe webhook endpoint to `https://<api>/api/webhooks/stripe`.
+Production checklist: `COOKIE_SECURE=true`, matching `FRONTEND_URL` / CORS origin, and Stripe webhook endpoint `https://<api-host>/api/webhooks/stripe`.
 
-## CI/CD
+---
 
-GitHub Actions (`.github/workflows/ci.yml`) runs backend typecheck + tests (with Postgres service) and frontend lint/test/build on every push/PR.
+## Known limitations
 
-## Known Limitations
+- Stripe Checkout uses inline `price_data` (no pre-created Stripe Price objects required for the demo)
+- Invoice PDFs use PDFKit; payment methods are managed via Stripe Customer Portal
+- Per-organization custom SMTP is an optional bonus and is **not** implemented
+- End-to-end payment/email delivery needs real Stripe / Resend test keys locally
+- Refresh rotation is basic (single stored hash per refresh token)
+- Renewal sync depends on Stripe delivering `invoice.paid` / subscription events to the webhook
 
-- Stripe Checkout uses inline `price_data` (no pre-created Stripe Price objects required for demo)
-- Invoice PDFs use PDFKit (not Puppeteer); payment methods are managed via Stripe Customer Portal
-- Per-organization custom SMTP is a listed bonus and is **not** implemented
-- Local Stripe/Resend require real test API keys for end-to-end payment/email delivery
-- Refresh cookie rotation is basic (single stored hash per refresh)
-- Renewal sync depends on Stripe sending `invoice.paid` / subscription events to the webhook endpoint
+### Bonus status
 
-## AI Usage
+| Bonus | Status |
+|-------|--------|
+| CI/CD (GitHub Actions) | Implemented |
+| UI polish / design system | Implemented |
+| PDF invoices | Implemented |
+| Per-org SMTP | Not implemented |
 
-This project was built with Cursor agent assistance for scaffolding, repetitive CRUD, UI pages, and documentation drafting. Architecture decisions (tenant isolation via `organizationId`, webhook-as-source-of-truth, Prisma `$transaction` for activation, HTTP-only JWT cookies) were specified deliberately and are intended to be fully explainable in review.
+---
+
+## AI usage
+
+Built with Cursor agent assistance for scaffolding, repetitive CRUD, UI pages, and documentation drafts.
+
+Architecture decisions were intentional and are meant to be fully explainable in review:
+- tenant isolation via `organizationId`
+- webhook as source of truth for activation
+- Prisma `$transaction` for paid onboarding
+- HTTP-only JWT cookies
+- webhook event recorded only after successful business effects
+
+---
 
 ## License
 
